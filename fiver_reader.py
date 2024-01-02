@@ -151,7 +151,7 @@ def comparer(npar, npsi, nblocks=2):
 
     zpar, xpar, Qpar, Erpar, Ezpar = readnfiles(npar, nblocks, ddir = 'paralpha0.0')
 
-    zpsi, xpsi, Qpsi, Erpsi, Ezpar =asciiread('pfiver_alpha0.0/pfiver{:05d}'.format(npsi)+'.dat')
+    zpsi, xpsi, Qpsi, Erpsi, Ezpsi =asciiread('pfiver_alpha0.0/pfiver{:05d}'.format(npsi)+'.dat')
     
     print(zpar, ' = ', zpsi)
     
@@ -160,12 +160,10 @@ def comparer(npar, npsi, nblocks=2):
 
     clf()
     fig, axs = plt.subplots(2)
-            
     axs[0].plot(xpar, Qpar.real, formatsequence[0], label=ztitle_par)
     axs[1].plot(xpar, Qpar.imag, formatsequence[0], label=ztitle_par)
     axs[0].plot(xpsi, Qpsi.real, formatsequence[1], label=ztitle_psi)
     axs[1].plot(xpsi, Qpsi.imag, formatsequence[1], label=ztitle_psi)
-    
     axs[0].set_ylabel(r'$\Re Q$')
     axs[1].set_ylabel(r'$\Im Q$')
     axs[0].set_xlabel(r'$\psi$')
@@ -176,4 +174,21 @@ def comparer(npar, npsi, nblocks=2):
     fig.set_size_inches(5.,8.)
     fig.tight_layout()
     savefig('comQs.png')
+
+    clf()
+    fig, axs = plt.subplots(2)
+    axs[0].plot(xpar, Ezpar.real, formatsequence[0], label=ztitle_par)
+    axs[1].plot(xpar, Ezpar.imag, formatsequence[0], label=ztitle_par)
+    axs[0].plot(xpsi, Ezpsi.real, formatsequence[1], label=ztitle_psi)
+    axs[1].plot(xpsi, Ezpsi.imag, formatsequence[1], label=ztitle_psi)
+    axs[0].set_ylabel(r'$\Re E_z$')
+    axs[1].set_ylabel(r'$\Im E_z$')
+    axs[0].set_xlabel(r'$\psi$')
+    axs[1].set_xlabel(r'$\psi$')
+    axs[0].set_xscale('log')
+    axs[1].set_xscale('log')
+    axs[1].legend()
+    fig.set_size_inches(5.,8.)
+    fig.tight_layout()
+    savefig('comEzs.png')
 

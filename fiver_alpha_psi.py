@@ -46,17 +46,16 @@ Rout = 1.0
 z0 = 10.
 npsi = 100
 zmax = 100.
-dzout = 0.001
+dzout = 0.01
 dz0 = 1e-4
 
-r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
-abmatch = True # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
+r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
 shitswitch = True
 
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
-
 
 def testplot(x, ctr, qua, aqua, qname, q0=None, q1 = None, ztitle=''):
     clf()
@@ -281,7 +280,7 @@ def byfun(psi, psif, Q, Er, Ez, z, Er1 = None):
 
     return Bz_half, Y_half
 
-def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, BC_k = None, Q1 = None, Er1 = None, Ez1 = None, Y1 = None, B1 = None):
+def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, BC_k = None, Q1 = None, Er1 = None, Ez1 = None, Y1 = None, B1 = None, r = None, rf = None):
     '''
     calculates derivatives in z
     '''
@@ -290,8 +289,10 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     psi0 = psi[0]-dpsi # ghost cell to the left
     psi1 = psi[-1]+dpsi # ghost cell to the right
     
-    r = rfun(z, psi)
-    rf = rfun(z, psif)
+    if r is None:
+        r = rfun(z, psi)
+    if rf is None:
+        rf = rfun(z, psif)
     r0 = rfun(z, psi0)
     r1 = rfun(z, psi1)
     
@@ -337,6 +338,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
         Q1 *= exp(1.j * BC_k * (z-z0))
     # Q1 = -Q[-1]
         
+    Er1g = 2.*Er1-Er[-1]
     '''
     if Er1 is None:
         Er1 = -Er[-1] # 2.*Er[-1]-Er[-2] # no idea what is the correct BC
@@ -344,7 +346,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
         Er1 *= exp(1.j * BC_k * (z-z0))
     '''
     if Ez1 is None:
-        Ez1 = -Ez[-1] - alpha/z * rf[-1] * exp(-psif[-1]/2.) * (Er1+Er[-1])
+        Ez1 = -Ez[-1] - alpha/z * rf[-1] * exp(-psif[-1]/2.) * 2. * Er1
         # Ez1 = -Ez[-1] # + alpha / z * (Er[-2]-3.*Er[-1]) # using linear extrapolation for Er
     else:
         Ez1 *= exp(1.j * BC_k * (z-z0))
@@ -353,7 +355,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     # B1 *= exp(1.j * BC_k * z)
     ee = Ez + alpha*r/z*exp(-psi/2.) * Er
     ee0 = Ez0 + alpha*r0/z*exp(-psi0/2.) * Er0
-    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1
+    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1g
     
     # print(psi0)
     # ii = input('r0')
@@ -373,11 +375,11 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     if r2norm:
         Bz_half[1:-1] += m * ((Er/r*exp(-psi/2.))[1:]+(Er/r*exp(-psi/2.))[:-1])/2./omega
         Bz_half[0] += m * (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.))/2./omega
-        Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
+        # Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
     else:
         Bz_half[1:-1] += m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
         Bz_half[0] += m * (Er[0]+Er0)/2./omega/rf[0]*exp(-psif[0]/2.)
-        Bz_half[-1] += m * (Er[-1]+Er1)/2./omega /rf[-1]*exp(-psif[-1]/2.)
+    Bz_half[-1] += m * Er1/omega /rf[-1]*exp(-psif[-1]/2.)
     
     # Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
     if shitswitch:
@@ -430,7 +432,8 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     dEr = alpha/z * Er + (2.+1j * alpha * omega * r**2 /z) * Ez * exp(psi/2.)/r + 0.5j * (m * (Bz_half*exp(psif/2.)/rf)[1:] + m * (Bz_half*exp(psif/2.)/rf)[:-1] - omega * Y_half[1:] - omega * Y_half[:-1]) - 1.j * alpha * m * exp(psi/2.) / r / z * Q
     
     # trying to evolve the ghost zone:
-    dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
+    dEr_ghost = 1.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]
+    # dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
     
     # Ez
     dEz = - 2. * (exp(-psi*(4.+sigma)/2.) * ((exp(psif*(sigma+3.)/2.)*Y_half)[1:]-(exp(psif*(sigma+3.)/2.)*Y_half)[:-1]) + \
@@ -444,7 +447,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     aEz[0] = 2. * chi / z**2 * exp(psif[0]*(-sigma)/2.) * ((exp(psi*(sigma-1.)/2.)*Er)[0]-exp(psi0*(sigma-1.)/2.)*Er0) / dpsi +\
         2. * alpha / z * exp(-psif[0] * (sigma+1.)/2.) * ((exp((sigma+1.)/2.*psi)*Ez)[0]-(exp((sigma+1.)/2.*psi0)*Ez0)) / dpsi
 #        2. * alpha / z * (Ez[0]-Ez0) / dpsi # zero derivatives?
-    aEz[-1] = 2. * chi / z**2 * exp(psif[-1]*(1.-sigma)/2.) * (exp(psi1*(sigma-1.)/2.)*Er1-(exp(psi*(sigma-1.)/2.)*Er)[-1]) / dpsi +\
+    aEz[-1] = 2. * chi / z**2 * exp(psif[-1]*(1.-sigma)/2.) * (exp(psi1*(sigma-1.)/2.)*Er1g-(exp(psi*(sigma-1.)/2.)*Er)[-1]) / dpsi +\
         2. * alpha / z * exp(-psif[-1] * (sigma+1.)/2.) * ((exp((sigma+1.)/2.*psi1)*Ez1)-(exp((sigma+1.)/2.*psi)*Ez)[-1]) / dpsi
 
     #        2. * alpha / z * (Ez1-Ez[-1]) / dpsi # anything better?
@@ -533,11 +536,12 @@ def onerun(icfile, iflog = False, ifpcolor = False):
     Er0 = m / k * Bz0 - omega/k * Y0 - 2.j / (omega+m) * Q0 # Er/r^sigma
     
     # psi1 = psi[-1]+dpsi
-    r1 = rfun(z0, psi1)
-    Q1 = (qrefun(psi1) + 1.j * qimfun(psi1)) * (Rout/R01)**2
-    Y1 = (yrefun(psi1) + 1.j * yimfun(psi1))
+    psi1f = psif[-1]
+    r1f = rfun(z0, psi1f)
+    Q1 = (qrefun(psi1f) + 1.j * qimfun(psi1f)) * (Rout/R01)**2
+    Y1 = (yrefun(psi1f) + 1.j * yimfun(psi1f))
     Ez1 = k / (omega+m) * Q1
-    Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1**2)
+    Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
     Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
     
     #
@@ -557,7 +561,7 @@ def onerun(icfile, iflog = False, ifpcolor = False):
     # ii =input('Er1')
 
     while(ctr < nz):
-        dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
+        dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
         # print(dQ[0], dEr[0], dEz[0])
         # ii = input('Q')
         # solamp = maximum(abs(Ez).max(), abs(Er).max())
@@ -577,10 +581,10 @@ def onerun(icfile, iflog = False, ifpcolor = False):
         # inner edge BCs
         # fixing Er or Ez with 87-89
 
-        dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost*dz/2.) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
-        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost2*dz/2.) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
-        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = Er1+dEr_ghost3*dz) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
+        dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
+        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost2*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
+        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = Er1+dEr_ghost3*dz, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
 
         Q  += (dQ1 + 2. * dQ2 + 2. * dQ3 + dQ4) * dz/6.
         Er += (dEr1 + 2. * dEr2 + 2. * dEr3 + dEr4) * dz/6.

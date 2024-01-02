@@ -27,6 +27,8 @@ csize = comm.Get_size()
 
 # print("size = ", csize)
 
+from timer import Timer # Joonas's timer
+
 from cmath import phase
 
 # quantities: Q, Er, Ez, Y, Bz
@@ -50,8 +52,8 @@ left = crank - 1
 right = crank + 1
 oneblock = int(npsi / nblocks) # number of cells in a block
 
-zmax = 15.
-dzout = 1.e-3
+zmax = 50.
+dzout = 1e-4
 
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
@@ -60,6 +62,11 @@ shitswitch = True
 outdir = 'paralpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
+
+# make Y and B global
+Bz_half = zeros(oneblock+1, dtype=complex) # B
+Y_half = zeros(oneblock+1, dtype=complex) # B
+aEz =zeros(oneblock+1, dtype=complex) # 2\chi / z^2 * psi^((3-sigma)/2) d_\psi (psi^((sigma-1)/2)er) + 2. * alpha / z psi d_\psi (ez)
 
 def rfun(z, psi):
     '''
@@ -98,17 +105,20 @@ def BCsend(leftpack_send, rightpack_send):
         rightpack = comm.recv(source = right, tag = right)
     return leftpack, rightpack
 
-def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = None, Er1 = None, Ez1 = None):
+def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = None, Er1 = None, Ez1 = None, r = None, rf = None):
     '''
     calculates derivatives in z
     '''
+    global Y_half, Bz_half, aEz
     
     dpsi = psi[1]-psi[0]
     psi0 = psi[0]-dpsi # ghost cell to the left
     psi1 = psi[-1]+dpsi # ghost cell to the right
     
-    r = rfun(z, psi)
-    rf = rfun(z, psif)
+    if r is None:
+        r = rfun(z, psi)
+    if rf is None:
+        rf = rfun(z, psif)
     r0 = rfun(z, psi0)
     r1 = rfun(z, psi1)
     
@@ -118,19 +128,18 @@ def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = N
         Ez0 = 0.75 * Ez[0] + 0.25 * Ez[1]
         Er0 = - 1.j * exp(psi0/2.)/r0 * Q0
 
+    Er1g = 2.*Er1-Er[-1]
     if crank==last:
         Q1 = -Q[-1] # outer ghost zone
-        Ez1 = -Ez[-1] - alpha/z * rf[-1] * exp(-psif[-1]/2.) * (Er1+Er[-1])
+        Ez1 = -Ez[-1] - alpha/z * rf[-1] * exp(-psif[-1]/2.) * 2. * Er1g
 
     ee = Ez + alpha*r/z*exp(-psi/2.) * Er
     ee0 = Ez0 + alpha*r0/z*exp(-psi0/2.) * Er0
-    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1
+    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1g
     
     # print(psi0)
     # ii = input('r0')
     sigma1 = (sigma+1.)/2.
-    
-    Bz_half = zeros(oneblock+1, dtype=complex) # B
     
     Bz_half[1:-1] = 2.j * exp(-sigma1*psif[1:-1]) * ((exp(sigma1*psi)*Q)[1:]-(exp(sigma1*psi)*Q)[:-1])/dpsi / rf[1:-1]**2/omega
     # + m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
@@ -149,13 +158,14 @@ def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = N
         Bz_half[1:-1] += m * ((Er/r*exp(-psi/2.))[1:]+(Er/r*exp(-psi/2.))[:-1])/2./omega
         if crank > first:
             Bz_half[0] += m * (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.))/2./omega
-        Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
+        # Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
     else:
         Bz_half[1:-1] += m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
         if crank > first:
             Bz_half[0] += m * (Er[0]+Er0)/2./omega/rf[0]*exp(-psif[0]/2.)
-        Bz_half[-1] += m * (Er[-1]+Er1)/2./omega /rf[-1]*exp(-psif[-1]/2.)
+        # Bz_half[-1] += m * (Er[-1]+Er1)/2./omega /rf[-1]*exp(-psif[-1]/2.)
     
+    Bz_half[-1] += m * Er1 /omega /rf[-1]*exp(-psif[-1]/2.)
     # Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
     '''
     if crank==last:
@@ -167,7 +177,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = N
             Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
     '''
     # YYYYYYYYYYYYY #
-    Y_half = zeros(oneblock+1, dtype=complex) # Y
+    # Y_half = zeros(oneblock+1, dtype=complex) # Y
 
     Y_half = m/2./omega * Bz_half * exp(psif/2.)/rf
     
@@ -212,21 +222,21 @@ def step(psi, psif, Q, Er, Ez, z = 0., Q0 = None, Er0 = None, Ez0 = None, Q1 = N
     dEr = alpha/z * Er + (2.+1j * alpha * omega * r**2 /z) * Ez * exp(psi/2.)/r + 0.5j * (m * (Bz_half*exp(psif/2.)/rf)[1:] + m * (Bz_half*exp(psif/2.)/rf)[:-1] - omega * Y_half[1:] - omega * Y_half[:-1]) - 1.j * alpha * m * exp(psi/2.) / r / z * Q
     
     # trying to evolve the ghost zone:
-    dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
+    dEr_ghost = 1.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1] # in phif[-1]
+    # dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
     
     # Ez
     dEz = - 2. * (exp(-psi*(4.+sigma)/2.) * ((exp(psif*(sigma+3.)/2.)*Y_half)[1:]-(exp(psif*(sigma+3.)/2.)*Y_half)[:-1]) + \
         exp(-psi*sigma1)/r * ( (exp(psif*sigma1)*Bz_half)[1:] - (exp(psif*sigma1)*Bz_half)[:-1]) ) / dpsi/r + \
         - 1.j * alpha * (2.*omega+m) * Er / (r * z * exp(psi/2.))- 1.j * (2.*(omega+m)/r**2 + alpha**2 * omega * r**2/z**2) * Ez  - 0.5j * alpha * (2.*omega+m) * (Bz_half[1:]+Bz_half[:-1]) / z + 2.j * chi * (omega+m) * Q/z**2
     
-    aEz =zeros(oneblock+1, dtype=complex) # 2\chi / z^2 * psi^((3-sigma)/2) d_\psi (psi^((sigma-1)/2)er) + 2. * alpha / z psi d_\psi (ez)
     aEz[1:-1] = 2. * chi / z**2 * exp(psif[1:-1]*(-sigma)/2.) * ((exp(psi*(sigma-1.)/2.)*Er)[1:]-(exp(psi*(sigma-1.)/2.)*Er)[:-1]) / dpsi +\
         2. * alpha / z * exp(-psif[1:-1] * (sigma+1.)/2.) * ((exp((sigma+1.)/2.*psi)*Ez)[1:]-(exp((sigma+1.)/2.*psi)*Ez)[:-1]) / dpsi
     
     aEz[0] = 2. * chi / z**2 * exp(psif[0]*(-sigma)/2.) * ((exp(psi*(sigma-1.)/2.)*Er)[0]-exp(psi0*(sigma-1.)/2.)*Er0) / dpsi +\
         2. * alpha / z * exp(-psif[0] * (sigma+1.)/2.) * ((exp((sigma+1.)/2.*psi)*Ez)[0]-(exp((sigma+1.)/2.*psi0)*Ez0)) / dpsi
 #        2. * alpha / z * (Ez[0]-Ez0) / dpsi # zero derivatives?
-    aEz[-1] = 2. * chi / z**2 * exp(psif[-1]*(1.-sigma)/2.) * (exp(psi1*(sigma-1.)/2.)*Er1-(exp(psi*(sigma-1.)/2.)*Er)[-1]) / dpsi +\
+    aEz[-1] = 2. * chi / z**2 * exp(psif[-1]*(1.-sigma)/2.) * (exp(psi1*(sigma-1.)/2.)*Er1g-(exp(psi*(sigma-1.)/2.)*Er)[-1]) / dpsi +\
         2. * alpha / z * exp(-psif[-1] * (sigma+1.)/2.) * ((exp((sigma+1.)/2.*psi1)*Ez1)-(exp((sigma+1.)/2.*psi)*Ez)[-1]) / dpsi
 
     #        2. * alpha / z * (Ez1-Ez[-1]) / dpsi # anything better?
@@ -312,11 +322,12 @@ def runBlock(icfile):
     Er0 = m / k * Bz0 - omega/k * Y0 - 2.j / (omega+m) * Q0 # Er/r^sigma
     
     # psi1 = psi[-1]+dpsi
-    r1 = rfun(z0, psi[-1]+dpsi)
-    Q1 = (qrefun(psi1) + 1.j * qimfun(psi1)) * (Rout/R01)**2
-    Y1 = (yrefun(psi1) + 1.j * yimfun(psi1))
+    psi1f = psif[-1]
+    r1f = rfun(z0, psif[-1])
+    Q1 = (qrefun(psi1f) + 1.j * qimfun(psi1f)) * (Rout/R01)**2
+    Y1 = (yrefun(psi1f) + 1.j * yimfun(psi1f))
     Ez1 = k / (omega+m) * Q1
-    Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1**2)
+    Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
     Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
 
     # synchronized output:
@@ -326,13 +337,20 @@ def runBlock(icfile):
     
     Q_left = None ; Er_left = None ; Ez_left = None ; Q_right = None ; Er_right = Er1 ; Ez_right = None
 
-    # print("Er1 = ", Er1)
-    # ii = input('Er')
+    if crank == first:
+        thetimer = Timer(["total", "step", "io"], ["BC", "step", "dt"])
+
+    if crank == first:
+        thetimer.start("total")
+        thetimer.start("io")
 
     while(ctr < nz):
         # Q_left = None ; Er_left = None ; Ez_left = None
         # Q_right = None ; Er_right = Er1 ; Ez_right = None
+
         # Exchanging BC:
+        if crank == first:
+            thetimer.start_comp("BC")
         leftpack_send = {'Q1': Q[0], 'Er1': Er[0], 'Ez1': Ez[0]}
         rightpack_send = {'Q0': Q[-1] , 'Er0': Er[-1], 'Ez0': Ez[-1]}
         leftpack, rightpack = BCsend(leftpack_send, rightpack_send)
@@ -342,43 +360,27 @@ def runBlock(icfile):
             Q_right = rightpack['Q1'] ; Er_right = rightpack['Er1']  ;  Ez_right = rightpack['Ez1']
         else:
             Er_right = Er1
-        
+        if crank == first:
+            thetimer.stop_comp("BC")
+            thetimer.start_comp("step")
         # print(Q_right, Er_right, Ez_right)
         # ii = input('right')
         
-        dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z = z, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right)
-        '''
-        Qmax = abs(Q).max()
-        Qmax = comm.allreduce(Qmax, op=MPI.MAX)
-        Ermax = abs(Er).max()
-        Ermax = comm.allreduce(Ermax, op=MPI.MAX)
-        Ezmax = abs(Ez).max()
-        Ezmax = comm.allreduce(Ezmax, op=MPI.MAX)
-        dQmax = abs(dQ1).max()
-        dQmax = comm.allreduce(dQmax, op=MPI.MAX)
-        dErmax = abs(dEr1).max()
-        dErmax = comm.allreduce(dErmax, op=MPI.MAX)
-        dEzmax = abs(dEz1).max()
-        dEzmax = comm.allreduce(dEzmax, op=MPI.MAX)
-
-        dratQ = dQmax/Qmax
-        dratEr = dErmax/Ermax
-        dratEz = dEzmax/Ezmax
-        dz = (minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
-        # print('crank = ', crank, ": z = ", z)
-        if dz < 1e-9:
-            print('time step smaller than 1e-9\n')
-            print('crank = ', crank, ": dz(before minimization) = ", dz)
-        dz = comm.allreduce(dz, op=MPI.MIN) # calculates one minimal dt
-        '''
-        dz = median(abs(Ez)/abs(dEz1)) * dz0
+        dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z = z, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
+        if crank == first:
+            thetimer.stop_comp("step")
+            thetimer.start_comp("dt")
+        dz = dz0 * minimum(minimum(abs(Ez).max(),abs(Q).max()),abs(Er).max()) / (abs(dEz1) + abs(dQ1) + abs(dEr1)).max()
         # minimum((abs(Q)/abs(dQ1)).min(), minimum((abs(Er)/abs(dEr1)).min(), (abs(Ez)/abs(dEz1)).min())) * dz0
         # print('crank = ', crank, ": dz(before minimization) = ", dz)
         dz = comm.allreduce(dz, op=MPI.MIN) # calculates one minimal dt
         # print('crank = ', crank, ": dz(after minimization) = ", dz)
-        #        dz = 1e-7
+        # dz = 1e-8
 
-        # dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right)
+        if crank == first:
+            thetimer.stop_comp("dt")
+            thetimer.start_comp("BC")
+
         leftpack_send = {'Q1': Q[0] + dQ1[0] * dz/2., 'Er1': Er[0] + dEr1[0] * dz/2., 'Ez1': Ez[0] + dEz1[0] * dz/2.}
         rightpack_send = {'Q0': Q[-1] + dQ1[-1] * dz/2. , 'Er0': Er[-1] + dEr1[-1] * dz/2., 'Ez0': Ez[-1] + dEz1[-1] * dz/2.}
         leftpack, rightpack = BCsend(leftpack_send, rightpack_send)
@@ -389,11 +391,16 @@ def runBlock(icfile):
         else:
             Er_right = Er1 + dEr_ghost1 * dz/2.
 
-        # print(Q_left, Er_left, Ez_left)
-        # ii = input('left')
+        if crank == first:
+            thetimer.stop_comp("BC")
+            thetimer.start_comp("step")
 
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+Ez1*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right)
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+Ez1*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
         
+        if crank == first:
+            thetimer.stop_comp("step")
+            thetimer.start_comp("BC")
+            
         leftpack_send = {'Q1': Q[0] + dQ2[0] * dz/2., 'Er1': Er[0] + dEr2[0] * dz/2., 'Ez1': Ez[0] + dEz2[0] * dz/2.}
         rightpack_send = {'Q0': Q[-1] + dQ2[-1] * dz/2. , 'Er0': Er[-1] + dEr2[-1] * dz/2., 'Ez0': Ez[-1] + dEz2[-1] * dz/2.}
         leftpack, rightpack = BCsend(leftpack_send, rightpack_send)
@@ -404,7 +411,15 @@ def runBlock(icfile):
         else:
             Er_right = Er1 + dEr_ghost2 * dz/2.
  
-        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right)
+        if crank == first:
+            thetimer.stop_comp("BC")
+            thetimer.start_comp("step")
+            
+        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
+
+        if crank == first:
+            thetimer.stop_comp("step")
+            thetimer.start_comp("BC")
 
         leftpack_send = {'Q1': Q[0] + dQ3[0] * dz, 'Er1': Er[0] + dEr3[0] * dz, 'Ez1': Ez[0] + dEz3[0] * dz}
         rightpack_send = {'Q0': Q[-1] + dQ3[-1] * dz , 'Er0': Er[-1] + dEr3[-1] * dz, 'Ez0': Ez[-1] + dEz3[-1] * dz}
@@ -416,7 +431,11 @@ def runBlock(icfile):
         else:
             Er_right = Er1 + dEr_ghost3 * dz
 
-        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right)
+        if crank == first:
+            thetimer.stop_comp("BC")
+            thetimer.start_comp("step")
+
+        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
 
         Q  += (dQ1 + 2. * dQ2 + 2. * dQ3 + dQ4) * dz/6.
         Er += (dEr1 + 2. * dEr2 + 2. * dEr3 + dEr4) * dz/6.
@@ -427,8 +446,15 @@ def runBlock(icfile):
             Er1 += (dEr_ghost1 + 2. * dEr_ghost2 + 2. * dEr_ghost3 + dEr_ghost4) * dz / 6.
 
         z += dz
-        
+
+        if crank == first:
+            thetimer.stop_comp("step")
+            thetimer.stop("step")
+            # thetimer.start_comp("dt")
+
         if z >= zstore:
+            if crank == first:
+                thetimer.start("io")
             print("crank = ", crank, ": z = ", z)
             if crank == first:
                 # print("dz0 = ", dz0)
@@ -443,5 +469,12 @@ def runBlock(icfile):
                         
             zstore *= (dzout+1.)
             ctr += 1
+            if crank == 0:
+                thetimer.stop("io")
+                thetimer.stats("step")
+                thetimer.stats("io")
+                thetimer.comp_stats()
+                thetimer.start("step") #refresh lap counter (avoids IO profiling)
+                thetimer.purge_comps()
 
 runBlock('qysol_o0.4_m1.dat')

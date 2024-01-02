@@ -1,0 +1,10 @@
+# data folders
+paralpha*/
+pfiver*/
+r2norm/
+# data files
+*.dat
+# pictures and movies
+*.png
+*.pdf
+*.mp4
