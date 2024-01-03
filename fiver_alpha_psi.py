@@ -670,4 +670,7 @@ def onerun(icfile, ifpcolor = False):
         savefig(outdir+'/pfivera.png')
 
 # ffmpeg -f image2 -r 15 -pattern_type glob -i 'fiver*.png' -pix_fmt yuv420p -b 4096k fiver.mp4
-onerun('qysol_o0.4_m1.dat', ifpcolor = True)
+
+if(size(sys.argv)>1):
+    # if alpha is set, the simulation starts automatically
+    onerun('qysol_o0.4_m1.dat', ifpcolor = True)

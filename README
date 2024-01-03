@@ -1,0 +1,8 @@
+
+usage:
+
+> python fiver_alpha_psi.py [alpha]
+
+for example:
+
+> python fiver_alpha_psi.py 0.1
