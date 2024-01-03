@@ -8,3 +8,5 @@ r2norm/
 *.png
 *.pdf
 *.mp4
+# launch scripts
+*.sh
