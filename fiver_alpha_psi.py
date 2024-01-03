@@ -35,9 +35,16 @@ rc('text', usetex=True)
 # #add amsmath to the preamble
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"] 
 
+if(size(sys.argv)>1):
+    print("launched with  alpha = "+str(sys.argv[1]))
+    # new conf file
+    alpha=double(sys.argv[1])
+    # print(conf+" configuration set by the arguments")
+else:
+    alpha = 0.0
+
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
-alpha = 0.0
 chi = alpha * (1.+2.*alpha)/6.
 omega = 0.4
 m = 1 # not applicable for m=0: the scaling shd then be different
@@ -456,7 +463,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
 
     return dQ, dEr, dEz, dEr_ghost
 
-def onerun(icfile, iflog = False, ifpcolor = False):
+def onerun(icfile, ifpcolor = False):
     # initial conditions involve some value of k and a source file
     # k is read from the file, omega and m do not need to coincide with the global omega and m
     
@@ -663,3 +670,4 @@ def onerun(icfile, iflog = False, ifpcolor = False):
         savefig(outdir+'/pfivera.png')
 
 # ffmpeg -f image2 -r 15 -pattern_type glob -i 'fiver*.png' -pix_fmt yuv420p -b 4096k fiver.mp4
+onerun('qysol_o0.4_m1.dat', ifpcolor = True)

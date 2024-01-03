@@ -58,6 +58,7 @@ dzout = 1e-4
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
 shitswitch = True
+ttest = True
 
 outdir = 'paralpha'+str(alpha)
 print(outdir)
@@ -343,6 +344,22 @@ def runBlock(icfile):
     if crank == first:
         thetimer.start("total")
         thetimer.start("io")
+
+    # topology test:
+    if ttest:
+        if crank > first:
+            comm.send({'data': 'from '+str(crank)+' to '+str(left)}, dest = left, tag = crank)
+        if crank < last:
+            comm.send({'data': 'from '+str(crank)+' to '+str(right)}, dest = right, tag = crank)
+        if crank > first:
+            leftdata = comm.recv(source = left, tag = left)
+            print("I, "+str(crank)+", received from "+str(left)+": "+leftdata['data'])
+        if crank < last:
+            rightdata = comm.recv(source = right, tag = right)
+            print("I, "+str(crank)+", received from "+str(right)+": "+rightdata['data'])
+        print("this was topology test\n")
+        # tt = input("t")
+
 
     while(ctr < nz):
         # Q_left = None ; Er_left = None ; Ez_left = None
