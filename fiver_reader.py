@@ -179,6 +179,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
     plot(zlist, ermax, formatsequence[2], label=r'$\max |E_r|$')
     xlabel(r'$z$')
     yscale('log')
+    xscale('log')
     legend()
     savefig(ddir+'/growthcurve.png')
 

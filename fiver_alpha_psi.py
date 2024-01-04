@@ -42,7 +42,7 @@ if(size(sys.argv)>1):
     else:
             alpha=double(sys.argv[1])
 else:
-    alpha = 0.0
+    alpha = 0.01
 
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
@@ -52,10 +52,10 @@ m = 1 # not applicable for m=0: the scaling shd then be different
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 200
+npsi = 100
 zmax = 100.
 dzout = 0.01
-dz0 = 1e-4
+dz0 = 1e-3
 
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
@@ -190,7 +190,7 @@ def rfun(z, psi):
     if alpha <= 0.:
         return exp(psi/2.) * (z/z0)**alpha * Rout
     else:
-        return z/z0 * sqrt((1.+sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
+        return z/z0 * sqrt((1.-sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
 
 def rtopsi(r, z):
     return 2.*log(r/Rout) - 2.*alpha * log(z/z0) + log(1.-chi * (r/z)**2)

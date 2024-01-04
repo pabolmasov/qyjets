@@ -76,7 +76,7 @@ def rfun(z, psi):
     if alpha <= 0.:
         return exp(psi/2.) * (z/z0)**alpha * Rout
     else:
-        return z/z0 * sqrt((1.+sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
+        return z/z0 * sqrt((1.-sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
 
 def rtopsi(r, z):
     return 2.*log(r/Rout) - 2.*alpha * log(z/z0) + log(1.-chi * (r/z)**2)
