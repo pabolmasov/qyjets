@@ -52,7 +52,7 @@ m = 1 # not applicable for m=0: the scaling shd then be different
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 100
+npsi = 200
 zmax = 100.
 dzout = 0.01
 dz0 = 1e-4
@@ -303,6 +303,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
         rf = rfun(z, psif)
     r0 = rfun(z, psi0)
     r1 = rfun(z, psi1)
+    rf1 = rf[-1]
     
     if Qout is None:
         # Q0 = 0.75* Q[0] + 0.25 * Q[1]
@@ -371,7 +372,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     
     Bz_half = zeros(npsi+1, dtype=complex) # B
     
-    Bz_half[1:-1] = 2.j * exp(-sigma1*psif[1:-1]) * ((exp(sigma1*psi)*Q)[1:]-(exp(sigma1*psi)*Q)[:-1])/dpsi / rf[1:-1]**2/omega
+    Bz_half[1:-1] = 2.j * exp(-sigma1*psif[1:-1]) * ((exp(sigma1*psi)*Q)[1:]-(exp(sigma1*psi)*Q)[:-1]) / dpsi / rf[1:-1]**2/omega
     # + m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
     # m * ((Er/r**2)[1:]+(Er/r**2)[:-1])/2.)/omega
     Bz_half[0] = 2.j * exp(-sigma1*psif[0]) * ((exp(sigma1*psi)*Q)[0]-exp(sigma1*psi0)*Q0)/dpsi /rf[0]**2/omega
@@ -412,7 +413,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     # additional terms:
     if r2norm:
         Y_half[1:-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[1:]+(r*Ez*exp(psi/2.))[:-1]) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[1:]+(Q*exp(psi/2.)/r)[:-1])
-        Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[0]+(r0*Ez0*exp(psi0/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[0]+(Q0*exp(psi1/2.)/r0))
+        Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[0]+(r0*Ez0*exp(psi0/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[0]+(Q0*exp(psi0/2.)/r0))
         Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[-1]+(r1*Ez1*exp(psi1/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
     else:
         Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.) - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
@@ -437,10 +438,12 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
 
     # Er
     
-    dEr = alpha/z * Er + (2.+1j * alpha * omega * r**2 /z) * Ez * exp(psi/2.)/r + 0.5j * (m * (Bz_half*exp(psif/2.)/rf)[1:] + m * (Bz_half*exp(psif/2.)/rf)[:-1] - omega * Y_half[1:] - omega * Y_half[:-1]) - 1.j * alpha * m * exp(psi/2.) / r / z * Q
+    dEr = alpha/z * Er + (2.+1j * alpha * omega * r**2 /z) * Ez * exp(psi/2.)/r + \
+    0.5j * ( m * (Bz_half*exp(psif/2.)/rf)[1:] + m * (Bz_half*exp(psif/2.)/rf)[:-1] - omega * Y_half[1:] - omega * Y_half[:-1]) - \
+    1.j * alpha * m * exp(psi/2.) / r / z * Q
     
     # trying to evolve the ghost zone:
-    dEr_ghost = 1.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]
+    dEr_ghost = 1.j * (m * exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1] - alpha / z * (1.+1.j * alpha * omega * rf1**2/z) * Er1
     # dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
     
     # Ez
@@ -578,6 +581,9 @@ def onerun(icfile, ifpcolor = False):
         dratEr = abs(dEr).max()/abs(Er)
         dratEz = abs(dEz).max()/abs(Ez)
         dz = median(minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
+        if abs(dEr_ghost) > 0.:
+            dzghost = abs(Er).max()/abs(dEr_ghost) * dz0
+            dz = minimum(dz, dzghost)
         # print(dEz)
         # print(dratQ.min(), dratEr.min(), dratEz.min())
         # ii = input(dz)
