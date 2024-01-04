@@ -36,10 +36,11 @@ rc('text', usetex=True)
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"] 
 
 if(size(sys.argv)>1):
-    print("launched with  alpha = "+str(sys.argv[1]))
-    # new conf file
-    alpha=double(sys.argv[1])
-    # print(conf+" configuration set by the arguments")
+    if csize > 0:
+        alpha=double(sys.argv[crank+1])
+        print("launched with  alpha = "+str(alpha))
+    else:
+            alpha=double(sys.argv[1])
 else:
     alpha = 0.0
 

@@ -12,6 +12,16 @@ from pylab import *
 formatsequence = ['k-', 'r:', 'g--', 'b-.', 'm--.']
 nformats = size(formatsequence)
 
+def rfun(z, psi, alpha, z0=10.):
+    '''
+    universal function to compute r(r, psi)
+    '''
+    chi = alpha * (1.+2.*alpha)/6.
+    if alpha <= 0.:
+        return sqrt(psi) * (z/z0)**alpha
+    else:
+        return z/z0 * sqrt((1.-sqrt(1.-4.*chi*psi*(z/z0)**(2.*(alpha-1.))))/2./chi)
+
 def asciiread(fname):
 
     f = open(fname, "r")
@@ -49,7 +59,7 @@ def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False):
             Ez = concatenate([Ez,Ez1])
         return z, x, Q, Er, Ez
 
-def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
+def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0.0):
     nk = size(karray)
     if nk <= 1:
         fiver_plot(karray[0], nblocks=nblocks)
@@ -66,6 +76,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
                 q2 = zeros([nz, nx], dtype=complex)
                 ez2 = zeros([nz, nx], dtype=complex)
                 er2 = zeros([nz, nx], dtype=complex)
+                qmax = zeros(nz, dtype = complex)
+                ermax = zeros(nz, dtype = complex)
+                ezmax = zeros(nz, dtype = complex)
             ztitle=r'$z = {:5.5f}$'.format(z)
             axs[0].plot(x, Q.real, formatsequence[ctr%nformats], label=ztitle)
             axs[1].plot(x, Q.imag, formatsequence[ctr%nformats], label=ztitle)
@@ -73,6 +86,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
                 q2[ctr,:] = Q
                 ez2[ctr,:] = Ez
                 er2[ctr,:] = Er
+                qmax[ctr] = abs(Q).max()
+                ermax[ctr] = abs(Er).max()
+                ezmax[ctr] = abs(Ez).max()
                 zlist.append(z)
             ctr+=1
         axs[0].set_ylabel(r'$\Re Q$')
@@ -128,11 +144,12 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
         fig.tight_layout()
         savefig(ddir+'/parfiverErs.png'.format(k))
         if p2d: # 2D plotting
+            x2, z2 = meshgrid(x, zlist)
             clf()
             pcolor(x, zlist, log10(abs(q2))) # assuming x is the same
             cb = colorbar()
             cb.set_label(r'$\log_{10}|Q|$')
-            # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
+            contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             savefig(ddir+'/Qabs.png')
@@ -140,6 +157,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
             pcolor(x, zlist, log10(abs(ez2))) # assuming x is the same
             cb = colorbar()
             cb.set_label(r'$\log_{10}|E_z|$')
+            contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
             ylabel(r'$z$')
@@ -148,10 +166,22 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False):
             pcolor(x, zlist, log10(abs(er2))) # assuming x is the same
             cb = colorbar()
             cb.set_label(r'$\log_{10}|E_r|$')
+            contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             savefig(ddir+'/Erabs.png')
+
+    # growth curves:
+    clf()
+    plot(zlist, qmax, formatsequence[0], label=r'$\max |Q|$')
+    plot(zlist, ezmax, formatsequence[1], label=r'$\max |E_z|$')
+    plot(zlist, ermax, formatsequence[2], label=r'$\max |E_r|$')
+    xlabel(r'$z$')
+    yscale('log')
+    legend()
+    savefig(ddir+'/growthcurve.png')
+
 
 
 def fiver_plot(k, nblocks=0, ddir = 'paralpha0.0'):
