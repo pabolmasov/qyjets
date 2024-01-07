@@ -275,3 +275,36 @@ def comparer(npar, npsi, nblocks=2):
     fig.tight_layout()
     savefig('comEzs.png')
 
+def qysol_plot(infile):
+    
+    lines = loadtxt(infile)
+    omega, m, rout, kre, kim = lines[0,:]
+    
+    # print(lines[0,:])
+    
+    r = lines[1:, 0]
+    Q = lines[1:, 1] + lines[1:, 2] * 1.j
+    Y = lines[1:, 3] + lines[1:, 4] * 1.j
+    
+    clf()
+    plot(r, abs(Q), 'g--', label=r'$|Q|$')
+    plot(r, -abs(Q), 'g--', label=r'$-|Q|$')
+    plot(r, Q.real, 'k-', label=r'$\Re Q$')
+    plot(r, Q.imag, 'k:', label=r'$\Im Q$')
+    xscale('log')
+    legend()
+    ylabel(r'$Q$')
+    xlabel(r'$r$')
+    savefig(infile+'_Q.png')
+
+    clf()
+    plot(r, abs(Y), 'g--', label=r'$|Y|$')
+    plot(r, -abs(Y), 'g--', label=r'$-|Y|$')
+    plot(r, Y.real, 'k-', label=r'$\Re Y$')
+    plot(r, Y.imag, 'k:', label=r'$\Im Y$')
+    xscale('log')
+    legend()
+    ylabel(r'$Y$')
+    xlabel(r'$r$')
+    savefig(infile+'_Y.png')
+    close()

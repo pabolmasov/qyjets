@@ -58,7 +58,7 @@ dzout = 0.01
 dz0 = 1e-3
 
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
-abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
+abmatch = True # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
 shitswitch = True
 
 outdir = 'pfiver_alpha'+str(alpha)
