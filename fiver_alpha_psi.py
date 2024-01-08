@@ -57,9 +57,9 @@ zmax = 100.
 dzout = 0.01
 dz0 = 1e-3
 
-r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = True # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
-shitswitch = True
+shitswitch = False
 
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
@@ -188,13 +188,13 @@ def rfun(z, psi):
     '''
     universal function to compute r(r, psi)
     '''
-    if alpha <= 0.:
+    if alpha <= 1.:
         return exp(psi/2.) * (z/z0)**alpha * Rout
     else:
         return z/z0 * sqrt((1.-sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
 
 def rtopsi(r, z):
-    return 2.*log(r/Rout) - 2.*alpha * log(z/z0) + log(1.-chi * (r/z)**2)
+    return 2.*log(r/Rout) - 2.*alpha * log(z/z0) # + log(1.-chi * (r/z)**2)
 
 def sslopefun(omega, m):
     return m-1.
@@ -476,7 +476,7 @@ def onerun(icfile, ifpcolor = False):
     
     # psi is from Rin/Rout to 1
     
-    psi0 = 2.*log(Rin/Rout)
+    psi0 = rtopsi(Rin/Rout, z0) #  2.*log(Rin/Rout)
     psi = -psi0 * (arange(npsi)+0.5)/double(npsi) + psi0
     
     # print(psi.min(), psi.max())
@@ -511,32 +511,47 @@ def onerun(icfile, ifpcolor = False):
     qre1 = lines[1:,1]  ;   qim1 = lines[1:,2]
     yre1 = lines[1:,3]  ;   yim1 = lines[1:,4]
 
-    k = kre + 1j * kim
+    k = kre + 1.j * kim
+    k *= (R01/Rout)**2
 
-    wsafe = abs(m+k*r1**2) > 1e-5 # excluding the region near the signular point
+    wsafe = abs(m+k*r1**2) > 0.01 # excluding the region near the signular point
+
+    rpole = sqrt(m/abs(k))
 
     # initial conditions:
-    qrefun = interp1d(2.*log(r1[wsafe]/R01), qre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    qimfun = interp1d(2.*log(r1[wsafe]/R01), qim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yrefun = interp1d(2.*log(r1[wsafe]/R01), yre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yimfun = interp1d(2.*log(r1[wsafe]/R01), yim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    qrefun = interp1d(rtopsi(r1[wsafe]/R01,z0), qre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    qimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), qim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    yrefun = interp1d(rtopsi(r1[wsafe]/R01, z0), yre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    yimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), yim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
 
     #  Q and Y normalized by r^sigma
     Q = (qrefun(psi) + 1.j * qimfun(psi)) * (Rout/R01)**2
     Y = (yrefun(psi) + 1.j * yimfun(psi))
-
-
-    k *= (R01/Rout)**2
-
-    # R01 -> rf[-1]
-
-    print("k = ", k)
+    
+    if (rpole < Rout) and (rpole > Rin):
+        Qpole = (qrefun(rtopsi(rpole/Rout, z0)) + 1.j * qimfun(rtopsi(rpole/Rout, z0))) * (Rout/R01)**2
+        Ypole = (yrefun(rtopsi(rpole/Rout, z0)) + 1.j * yimfun(rtopsi(rpole/Rout, z0)))
+        Npole = (2.j * k /(omega+m) * Qpole + (2.*omega+m) * Ypole) # nominator of B
+        print("Npole = ", Npole)
+        # ii = input('N')
+    else:
+        Npole = 0.
 
     # now we need the initial conditions for Er and Ez
     Ez = k / (omega+m) * Q # Ez/r^sigma+1
-    Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y) / (m + k*r**2) # Bz / r^sigma+1
+    Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y - Npole) / (m + k*r**2) # Bz / r^sigma+1
     Er = m / k * Bz - omega/k * Y - 2.j / (omega+m) * Q # Er/r^sigma
-    
+
+    clf()
+    plot((m+k*r**2).real, ((2.j * k /(omega+m) * Q + (2.*omega+m) * Y)).real, 'k-')
+    plot((m+k*r**2).real, ((2.j * k /(omega+m) * Q + (2.*omega+m) * Y)-Npole).real, 'k:')
+    plot([0.], [Npole], 'rx')
+    plot([-0.1,0.1], [0.,0.], 'b-')
+    plot([0.,0.], [-0.1,0.1], 'b-')
+    xlim(-0.1, 0.1) ; ylim(-0.1, 0.1)
+    savefig('Btest.png')
+    # ii = input('B')
+
     Qinit = copy(Q)
     Ezinit = copy(Ez)
     Erinit = copy(Er)

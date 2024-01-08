@@ -159,6 +159,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
         Q = (m * (omega+m)/ k / (sslope+1.)) * 1j
 
     # maxQ  = 0.
+    mk = 0. ; N = 0. ; ncrit = 0.
     
     r = drmin
     dr = drmin
@@ -193,6 +194,16 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
         # print("r = {:10.10f}".format(log10(r)), "; dr = ", dr)
         # ii = input("r")
         # maxQ = maximum(sqrt(Q.real**2+Q.imag**2), maxQ)
+        # checking the singular point:
+        mkprev = mk ; Nprev = N
+        mk = m + k*r**2
+        N = 2.j*k / (omega+m) * Q + (2.*omega+m) * Y
+        # print("mm = ", mk*mkprev)
+        if (mk*mkprev).real < 0.:
+            # print("r = ", r, "; dr = ", dr)
+            # ii = input("sign change")
+            ncrit = N
+            # if there is a sign change in mk, we demand a sign change or an least a small value of N
 
         if (r>=rstore): #  & ifplot:
             # print(r, Q, Y)
@@ -261,7 +272,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     if isnan(Qlast):
         return [100.,100.]
         
-    return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    if abs(ncrit) > abs(Qlast):
+        return [ncrit.real, ncrit.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    else:
+        return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
 
 def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
     '''
