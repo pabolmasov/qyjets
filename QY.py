@@ -61,7 +61,7 @@ def RHSQY(r, k, omega, m):
     
 def RHSYQ(r, k, omega, m):
     if m==0:
-        return -1j * k**2 * r / omega
+        return -1.j * k**2 * r / omega
     else:
         krsq = k * r**2
         return -1.j * k * (m+krsq) / ( omega + m )
@@ -134,7 +134,7 @@ def ksigns(omega, m, R0):
     curvescompare('qysol_st.dat', 'qysol_un.dat')
 
 
-def onecurve(kvec, omega, m, R0, ifplot = False):
+def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     
     #if no_kim_neg & (kvec[1]< 0.):
     #    return [100., 100.]
@@ -153,7 +153,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False):
     
     r = 0. ; rstore = 0.
     Y = 1. + 0.j
-    Q = (m * (omega+m)/ k / (sslope+1.)) * 1j
+    if Q0 is not None:
+        Q = Q0
+    else:
+        Q = (m * (omega+m)/ k / (sslope+1.)) * 1j
 
     # maxQ  = 0.
     
@@ -168,7 +171,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False):
         if m==0:
             dr = minimum(maximum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
         else:
-            dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
+            if abs(Q) > 1e-8:
+                dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
+            else:
+                dr = minimum(abs(Y/dY)*tol,dr0)
         # dr = minimum(maximum(drmin, drmin/(r+drmin) * tol), drmin
         # minimum(maximum(abs(Q/dQ) * tol,dr0 * r), maximum(abs(Y/dY) * tol,dr0 * r))
         
@@ -558,10 +564,10 @@ def imtest():
     fig.set_size_inches(10,6)
     savefig('imtest.png')
 
-#  res = root(onecurve, [-2.614348900417678, 0.], args = (0.4, 1, 1.), tol=1e-8)
+#  res = root(onecurve, [-2.614348900417678, 0.001], args = (0.4, 1, 1.), tol=1e-8)
 # res = root(onecurve, [-1.7371693428009531, 0.], args = (0.4, 1, 1.), tol=1e-8)
 # res = root(onecurve, [5.275542556065922, 0.], args = (0.4, 1, 1.), tol=1e-8)
 # onecurve(res.x, 0.4,1,1., ifplot=True)
 # QYmin(0.4,1)
-
+# onecurve([1.25,0.], 0.4,1,1., ifplot=True) # k = m^2 / 2 omega Rout^2
 # -2.61399535e+00,  1.31728768e-15

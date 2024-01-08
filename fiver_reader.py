@@ -59,7 +59,7 @@ def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False):
             Ez = concatenate([Ez,Ez1])
         return z, x, Q, Er, Ez
 
-def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0.0):
+def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0.0, psislice = None):
     nk = size(karray)
     if nk <= 1:
         fiver_plot(karray[0], nblocks=nblocks)
@@ -183,6 +183,30 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
     legend()
     savefig(ddir+'/growthcurve.png')
 
+    if psislice is not None:
+        z = asarray(zlist)
+        k = -2.6139953464141414 # kostylj
+        wpsi = abs(x-psislice).argmin()
+        clf()
+        fig = figure()
+        plot(zlist, (q2[0,wpsi] * exp(1.j * k * (z-z[0]))).real, 'r:')
+        plot(zlist, (q2[0,wpsi] * exp(1.j * k * (z-z[0]))).imag, 'r--')
+        plot(zlist, abs(q2)[:,wpsi], 'k-')
+        plot(zlist, (q2.real)[:,wpsi], 'k:')
+        plot(zlist, (q2.imag)[:,wpsi], 'k--')
+        fig.set_size_inches(15.,5.)
+        xlabel(r'$z$')
+        savefig(ddir+'/zsliceQ.png')
+        clf()
+        fig = figure()
+        plot(zlist, (er2[0,wpsi] * exp(1.j * k * (z-z[0]))).real, 'r:')
+        plot(zlist, (er2[0,wpsi] * exp(1.j * k * (z-z[0]))).imag, 'r--')
+        plot(zlist, abs(er2)[:,wpsi], 'k-')
+        plot(zlist, (er2.real)[:,wpsi], 'k:')
+        plot(zlist, (er2.imag)[:,wpsi], 'k--')
+        fig.set_size_inches(15.,5.)
+        xlabel(r'$z$')
+        savefig(ddir+'/zsliceEr.png')
 
 
 def fiver_plot(k, nblocks=0, ddir = 'paralpha0.0'):
@@ -287,8 +311,8 @@ def qysol_plot(infile):
     Y = lines[1:, 3] + lines[1:, 4] * 1.j
     
     clf()
-    plot(r, abs(Q), 'g--', label=r'$|Q|$')
-    plot(r, -abs(Q), 'g--', label=r'$-|Q|$')
+    # plot(r, abs(Q), 'g--', label=r'$|Q|$')
+    # plot(r, -abs(Q), 'g--', label=r'$-|Q|$')
     plot(r, Q.real, 'k-', label=r'$\Re Q$')
     plot(r, Q.imag, 'k:', label=r'$\Im Q$')
     xscale('log')
@@ -298,8 +322,8 @@ def qysol_plot(infile):
     savefig(infile+'_Q.png')
 
     clf()
-    plot(r, abs(Y), 'g--', label=r'$|Y|$')
-    plot(r, -abs(Y), 'g--', label=r'$-|Y|$')
+    #plot(r, abs(Y), 'g--', label=r'$|Y|$')
+    # plot(r, -abs(Y), 'g--', label=r'$-|Y|$')
     plot(r, Y.real, 'k-', label=r'$\Re Y$')
     plot(r, Y.imag, 'k:', label=r'$\Im Y$')
     xscale('log')

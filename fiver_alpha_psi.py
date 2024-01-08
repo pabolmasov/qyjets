@@ -87,6 +87,7 @@ def testplot(x, ctr, qua, aqua, qname, q0=None, q1 = None, ztitle=''):
     # ylim(-1.,1.)
     # fig.set_size_inches(4.,4.)
     xscale('log')
+    # xlim(0.3,0.5)
     fig.tight_layout()
     savefig(outdir+'/pfiver'+qname+'{:05d}.png'.format(ctr))
     close()
@@ -510,17 +511,20 @@ def onerun(icfile, ifpcolor = False):
     qre1 = lines[1:,1]  ;   qim1 = lines[1:,2]
     yre1 = lines[1:,3]  ;   yim1 = lines[1:,4]
 
+    k = kre + 1j * kim
+
+    wsafe = abs(m+k*r1**2) > 1e-5 # excluding the region near the signular point
+
     # initial conditions:
-    qrefun = interp1d(2.*log(r1/R01), qre1, bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    qimfun = interp1d(2.*log(r1/R01), qim1, bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yrefun = interp1d(2.*log(r1/R01), yre1, bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yimfun = interp1d(2.*log(r1/R01), yim1, bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    qrefun = interp1d(2.*log(r1[wsafe]/R01), qre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    qimfun = interp1d(2.*log(r1[wsafe]/R01), qim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    yrefun = interp1d(2.*log(r1[wsafe]/R01), yre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+    yimfun = interp1d(2.*log(r1[wsafe]/R01), yim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
 
     #  Q and Y normalized by r^sigma
     Q = (qrefun(psi) + 1.j * qimfun(psi)) * (Rout/R01)**2
     Y = (yrefun(psi) + 1.j * yimfun(psi))
 
-    k = kre + 1j * kim
 
     k *= (R01/Rout)**2
 
