@@ -104,14 +104,14 @@ def asciiout(fname,s, x, qre, qim, erre, erim, ezre, ezim):
     fout.flush()
     fout.close()
 
-def asciiout_f(fname,s, x, bre, bim, bre, bim):
+def asciiout_f(fname,s, x, bre, bim, yre, yim):
     # TODO: single ASCII output procedure
     fout = open(fname, 'w')
     
     fout.write('# '+s+'\n')
     
     for k in arange(size(x)):
-        fout.write(str(x[k])+' '+str(bre[k])+' '+str(bim[k])+' '+str(bre[k])+' '+str(bim[k])+'\n')
+        fout.write(str(x[k])+' '+str(bre[k])+' '+str(bim[k])+' '+str(yre[k])+' '+str(yim[k])+'\n')
         
     fout.flush()
     fout.close()
@@ -655,7 +655,7 @@ def onerun(icfile, ifpcolor = False):
             asciiout(fname, headerstring, exp(psi), Q.real, Q.imag, Er.real, Er.imag, Ez.real, Ez.imag)
             # BY output:
             fnameBY = outdir+'/pfiverBY{:05d}'.format(ctr)+'.dat'
-            asciiout(fnameBY, headerstring, exp(psif), B.real, B.imag, Y.real, Y.imag)
+            asciiout_f(fnameBY, headerstring, exp(psif), B.real, B.imag, Y.real, Y.imag)
 
             if ifpcolor:
                 zlist.append(z)
