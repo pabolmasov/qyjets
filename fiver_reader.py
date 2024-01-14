@@ -100,8 +100,8 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 ez2 = zeros([nz, nx], dtype=complex)
                 er2 = zeros([nz, nx], dtype=complex)
                 if ifBY:
-                    b2 = zeros([nz, nx], dtype=complex)
-                    y2 = zeros([nz, nx], dtype=complex)
+                    b2 = zeros([nz, nx+1], dtype=complex)
+                    y2 = zeros([nz, nx+1], dtype=complex)
                 qmax = zeros(nz, dtype = complex)
                 ermax = zeros(nz, dtype = complex)
                 ezmax = zeros(nz, dtype = complex)
