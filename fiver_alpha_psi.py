@@ -42,7 +42,7 @@ if(size(sys.argv)>1):
     else:
             alpha=double(sys.argv[1])
 else:
-    alpha = 0.01
+    alpha = 0.0
 
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
@@ -57,9 +57,9 @@ zmax = 100.
 dzout = 0.01
 dz0 = 1e-3
 
-r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
-abmatch = True # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
-shitswitch = False
+r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
+shitswitch = True # turns on explicit inner BCs
 
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
@@ -100,6 +100,18 @@ def asciiout(fname,s, x, qre, qim, erre, erim, ezre, ezim):
     
     for k in arange(size(x)):
         fout.write(str(x[k])+' '+str(qre[k])+' '+str(qim[k])+' '+str(erre[k])+' '+str(erim[k])+' '+str(ezre[k])+' '+str(ezim[k])+'\n')
+        
+    fout.flush()
+    fout.close()
+
+def asciiout_f(fname,s, x, bre, bim, bre, bim):
+    # TODO: single ASCII output procedure
+    fout = open(fname, 'w')
+    
+    fout.write('# '+s+'\n')
+    
+    for k in arange(size(x)):
+        fout.write(str(x[k])+' '+str(bre[k])+' '+str(bim[k])+' '+str(bre[k])+' '+str(bim[k])+'\n')
         
     fout.flush()
     fout.close()
@@ -188,10 +200,10 @@ def rfun(z, psi):
     '''
     universal function to compute r(r, psi)
     '''
-    if alpha <= 1.:
-        return exp(psi/2.) * (z/z0)**alpha * Rout
-    else:
-        return z/z0 * sqrt((1.-sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
+    # if alpha <= 0.:
+    return exp(psi/2.) * (z/z0)**alpha * Rout
+    # else:
+    #    return z/z0 * sqrt((1.-sqrt(1.-4.*chi*exp(psi)*(z/z0)**(2.*(alpha-1.))))/2./chi) * Rout
 
 def rtopsi(r, z):
     return 2.*log(r/Rout) - 2.*alpha * log(z/z0) # + log(1.-chi * (r/z)**2)
@@ -205,34 +217,57 @@ def sslopefun(omega, m):
 
 sigma = sslopefun(omega, m)
 
-def byfun(psi, psif, Q, Er, Ez, z, Er1 = None):
+def leftBC(y0, y1):
     '''
-    calculates B and Y for visualization purposes (and potentially for the "step")
+    if we want 0 derivative @ half-step, = y0
+    if we want 0 derivative in the ghost zone, = 4/3 y0 - 1/3 y1
+    if we want 0 derivative in the first cell, =y1
+    if we want linear extrapolation, = 2.*y0-y1
+    '''
+    return y0*2. - y1 # (4.*y0-y1)/3. # (y0*2.65-y1)/1.65 # (4.*y0-y1)/3. # (9.*y0-y1)/8.
+
+def abmatchBC(y0, y1, x0, x1, xg):
+    acoeff = (y1-y0)/(x1-x0)
+    bcoeff = (y0*x1-y1*x0)/(x1-x0)
+    return acoeff * xg + bcoeff
+
+def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = None, Er1 = None, Ez1 = None):
+    '''
+    calculates B and Y for visualization purposes and  for the "step"
     '''
     dpsi = psi[1]-psi[0]
     psi0 = psi[0]-dpsi # ghost cell to the left
     psi1 = psi[-1]+dpsi # ghost cell to the right
 
-    r = rfun(z, psi)
-    rf = rfun(z, psif)
+    # r = rfun(z, psi)
+    # rf = rfun(z, psif)
     r0 = rfun(z, psi0)
     r1 = rfun(z, psi1)
 
-    Q0 = Q[0]
-    Er0 = Er[0]  # -1.j * (z/z0)**(2.*alpha) * Q0
-    Ez0 = Ez[0]
+    if Q0 is None:
+        Q0 = leftBC(Q[0], Q[1]) # (3.*Q[0]+Q[1])/4.
+        # Q0 = 0. # !!! temporary
+    # Er0 = -1.j * (z/z0)**(2.*alpha) * Q0
+    if Er0 is None:
+        Er0 = -1.j*exp(psi0/2.)/r0*Q0
+        Er0 = leftBC(Er[0], Er[1])
+    # Ez0 = Ez[0]
+    if Ez0 is None:
+        Ez0 = leftBC(Ez[0], Ez[1]) # (3.*Ez[0] + Ez[1])/4.
     
-    Q1 = -Q[-1]
+    if Q1 is None:
+        Q1 = -Q[-1]
     if Er1 is None:
         Er1 = 2.*Er[-1]-Er[-2]
+    Er1g = 2.*Er1-Er[-1]
     # - Er[-1] + 2. *omega/m * (exp(psif/2.)*rf * Bz_half)[-1] - 4.j/m * (exp(psif*(-sigma)/2.)/rf)[-1] * ((exp(psi*(sigma+1.)/2.)*Q)[-1] - exp(psi1*(sigma+1.)/2.)*Q1) / dpsi # the same as for Bz_half (((
     # 2.*Er[-1]-Er[-2]
     # print("psif[-1] = ", psif[-1])
-    Ez1 = -Ez[-1] - alpha/z * rf[-1]*exp(-psif[-1]/2.) * (Er1 + Er[-1])
+    Ez1 = -Ez[-1] - alpha/z * rf[-1]*exp(-psif[-1]/2.) * Er1 * 2.
 
     ee = Ez + alpha*r/z*exp(-psi/2.) * Er
     ee0 = Ez0 + alpha*r0/z*exp(-psi0/2.) * Er0
-    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1
+    ee1 = Ez1 + alpha *r1/ z * exp(-psi1/2.) * Er1g
     # ee1 = -ee[-1]
 
     sigma1 = (sigma+1.)/2.
@@ -246,15 +281,26 @@ def byfun(psi, psif, Q, Er, Ez, z, Er1 = None):
     if r2norm:
         Bz_half[1:-1] += m * ((Er/r*exp(-psi/2.))[1:]+(Er/r*exp(-psi/2.))[:-1])/2./omega
         Bz_half[0] += (m/2./omega) * (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.))
-        Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
+        Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1g/r1*exp(-psi1/2.))/2./omega
     else:
         Bz_half[1:-1] += m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
         Bz_half[0] += (m/2./omega) * (Er[0]+Er0)/rf[0]*exp(-psif[0]/2.)
-        Bz_half[-1] += m * (Er[-1]+Er1)/2./omega /rf[-1]*exp(-psif[-1]/2.)
+        Bz_half[-1] += m * Er1/omega /rf[-1]*exp(-psif[-1]/2.)
     
-    acoeff = (Bz_half[2]-Bz_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-    bcoeff = (Bz_half[1]*exp(2.*psif[2])-Bz_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
-    Bz_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+    #     acoeff = (Bz_half[2]-Bz_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
+    #     bcoeff = (Bz_half[1]*exp(2.*psif[2])-Bz_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
+    #     Bz_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+    # Bz_half[0] = (m/omega*0.5) * (1.j * (Q[0]/r[0]**2+Q0/r0**2) + (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.)))
+    
+    if shitswitch:
+        Bz_half[0] = 1.j /m * (1.-omega) * (ee0+ee[0]) - 0.5j * (Ez0+Ez[0])
+    else:
+        if abmatch:
+            acoeff = (Bz_half[2]-Bz_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
+            bcoeff = (Bz_half[1]*exp(2.*psif[2])-Bz_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
+            Bz_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+        else:
+            Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
     
     Y_half = zeros(npsi+1, dtype=complex) # Y
 
@@ -270,24 +316,36 @@ def byfun(psi, psif, Q, Er, Ez, z, Er1 = None):
     if r2norm:
         Y_half[1:-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[1:]+(r*Ez*exp(psi/2.))[:-1]) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[1:]+(Q*exp(psi/2.)/r)[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[0]+(r0*Ez0*exp(psi0/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[0]+(Q0*exp(psi1/2.)/r0))
-        Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[-1]+(r1*Ez1*exp(psi1/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
+        Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[-1]+(r1*Ez1*exp(psi1/2.))) # - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
     else:
         Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.) - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * (Ez[0]+Ez0) * rf[0]*exp(psif[0]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[0] / z * (Q[0]+Q0)
-        Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*exp(psif[-1]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
+        Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*exp(psif[-1]/2.)#  - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
 
     # Y_half[0] = Y_half[1]
     # Y_half[0] = (2.*Y_half[1]+Y_half[2])/3. # fitting a parabola to ensure zero derivative at psi-1/2
-    acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-    bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
+    # acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
+    # bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
     
     # Y_half[-1] = Y_half[-2] * 2. - Y_half[-3] # !!!should it be this way?
-
-    Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+    
+    if shitswitch:
+        Y_half[0] = -0.5j * exp(psif[0]/2.)/rf[0] * (ee0+ee[0])
+    else:
+        if abmatch:
+            acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
+            bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
+            Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff
+        else:
+            Y_half[0] = (2.*Y_half[1]+Y_half[2])/3.
+    
+    # Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
 
     # Y_half[-1]= -Y_half[-1] # why>??
 
     return Bz_half, Y_half
+
+############ the actual step ############################
 
 def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, BC_k = None, Q1 = None, Er1 = None, Ez1 = None, Y1 = None, B1 = None, r = None, rf = None):
     '''
@@ -308,22 +366,22 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     
     if Qout is None:
         # Q0 = 0.75* Q[0] + 0.25 * Q[1]
-        if (abmatch):
-            acoeff = (Q[1]-Q[0])/(exp(2.*psi[1])-exp(2.*psi[0]))
-            bcoeff = (Q[0]*exp(2.*psi[1])-Q[1]*exp(2.*psi[0]))/(exp(2.*psi[1])-exp(2.*psi[0]))
-            Q0 = acoeff * exp(2.*psi0) + bcoeff
+        if abmatch:
+            Q0 = abmatchBC(Q[0], Q[1], exp(psi[0]*2.), exp(psi[1]*2.), exp(psi0*2.))
         else:
-            Q0 = 0.75 * Q[0] + 0.25 * Q[1]
+            # Q0 = 0.75 * Q[0] + 0.25 * Q[1]
+            Q0 = leftBC(Q[0], Q[1]) # (4.*Q[0]-Q[1])/3.
     else:
         Q0 = Qout * exp(1.j * BC_k * (z-z0))
     if Erout is None:
         # Er0 = 0.75 * Er[0] + 0.25 * Er[1] # -1.j * (z/z0)**(2.*alpha) * Q0 # Er[0]
         if abmatch:
-            acoeff = (Er[1]-Er[0])/(exp(2.*psi[1])-exp(2.*psi[0]))
-            bcoeff = (Er[0]*exp(2.*psi[1])-Er[1]*exp(2.*psi[0]))/(exp(2.*psi[1])-exp(2.*psi[0]))
-            Er0 = acoeff * exp(2.*psi0) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+            Er0 = abmatchBC(Er[0], Er[1], exp(psi[0]*2.), exp(psi[1]*2.), exp(psi0*2.))
+            #acoeff = (Er[1]-Er[0])/(exp(2.*psi[1])-exp(2.*psi[0]))
+            #bcoeff = (Er[0]*exp(2.*psi[1])-Er[1]*exp(2.*psi[0]))/(exp(2.*psi[1])-exp(2.*psi[0]))
+            #Er0 = acoeff * exp(2.*psi0) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
         else:
-            Er0 = 0.75 * Er[0] + 0.25 * Er[1]
+            Er0 = leftBC(Er[0], Er[1]) # 0.75 * Er[0] + 0.25 * Er[1]
         if shitswitch:
             Er0 = -1.j*exp(psi0/2.)/r0*Q0
     else:
@@ -331,11 +389,18 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     if Ezout is None:
         # Ez0 = 0.75 * Ez[0] + 0.25 * Ez[1]
         if abmatch:
-            acoeff = (Ez[1]-Ez[0])/(exp(2.*psi[1])-exp(2.*psi[0]))
-            bcoeff = (Ez[0]*exp(2.*psi[1])-Ez[1]*exp(2.*psi[0]))/(exp(2.*psi[1])-exp(2.*psi[0]))
-            Ez0 = acoeff * exp(2.*psi0) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
+            Ez0 = abmatchBC(Ez[0], Ez[1], exp(psi[0]*2.), exp(psi[1]*2.), exp(psi0*2.))
+            #acoeff = (Ez[1]-Ez[0])/(exp(2.*psi[1])-exp(2.*psi[0]))
+            #bcoeff = (Ez[0]*exp(2.*psi[1])-Ez[1]*exp(2.*psi[0]))/(exp(2.*psi[1])-exp(2.*psi[0]))
+            # Ez0 = acoeff * exp(2.*psi0) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
         else:
-            Ez0 = 0.75 * Ez[0] + 0.25 * Ez[1]
+            Ez0 = leftBC(Ez[0], Ez[1]) # (4.*Ez[0] - Ez[1])/3. # 0.75 * Ez[0] + 0.25 * Ez[1]
+            # Ez0 =0.75 * Ez[0] + 0.25 * Ez[1]
+        # print(Ez0)
+        # psishift = psi0
+        # Ez0 = abmatchBC(Ez[0], Ez[1], psi[0]-psishift, psi[1]-psishift, psi0-psishift)
+        # print(Ez0)
+        # ii = input('E')
     else:
         Ez0 = Ezout * exp(1.j * BC_k * (z-z0))
 
@@ -371,69 +436,8 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     # ii = input('r0')
     sigma1 = (sigma+1.)/2.
     
-    Bz_half = zeros(npsi+1, dtype=complex) # B
-    
-    Bz_half[1:-1] = 2.j * exp(-sigma1*psif[1:-1]) * ((exp(sigma1*psi)*Q)[1:]-(exp(sigma1*psi)*Q)[:-1]) / dpsi / rf[1:-1]**2/omega
-    # + m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
-    # m * ((Er/r**2)[1:]+(Er/r**2)[:-1])/2.)/omega
-    Bz_half[0] = 2.j * exp(-sigma1*psif[0]) * ((exp(sigma1*psi)*Q)[0]-exp(sigma1*psi0)*Q0)/dpsi /rf[0]**2/omega
-    #  + m * (Er[0]+Er0)/2./omega /rf[0]*exp(-psif[0]/2.) # + m * (Er[0]/r[0]**2+Er0/r0**2)/2.)/omega
-    Bz_half[-1] = 2.j * exp(-psif[-1]*sigma1) * (exp(sigma1*psi1)*Q1-(exp(sigma1*psi)*Q)[-1])/dpsi/rf[-1]**2/omega
-    # something to do with the BC.
-    # + m * (Er[-1]+Er1)/2./omega /rf[-1] * exp(-psif[-1]/2.) # m * ((Er/r**2)[-1]+Er1/r1**2)/2.)/omega
-    
-    if r2norm:
-        Bz_half[1:-1] += m * ((Er/r*exp(-psi/2.))[1:]+(Er/r*exp(-psi/2.))[:-1])/2./omega
-        Bz_half[0] += m * (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.))/2./omega
-        # Bz_half[-1] += m * ((Er/r*exp(-psi[-1]/2.))[-1]+Er1/r1*exp(-psi1/2.))/2./omega
-    else:
-        Bz_half[1:-1] += m * (Er[1:]+Er[:-1])/2./omega /rf[1:-1]*exp(-psif[1:-1]/2.)
-        Bz_half[0] += m * (Er[0]+Er0)/2./omega/rf[0]*exp(-psif[0]/2.)
-    Bz_half[-1] += m * Er1/omega /rf[-1]*exp(-psif[-1]/2.)
-    
-    # Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
-    if shitswitch:
-        Bz_half[0] = 1.j /m * (1.-omega) * (ee0+ee[0]) - 0.5j * (Ez0+Ez[0])
-    else:
-        if abmatch:
-            acoeff = (Bz_half[2]-Bz_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-            bcoeff = (Bz_half[1]*exp(2.*psif[2])-Bz_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
-            Bz_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
-        else:
-            Bz_half[0] = (2.*Bz_half[1]+Bz_half[2])/3.
-    # YYYYYYYYYYYYY #
-    Y_half = zeros(npsi+1, dtype=complex) # Y
+    Bz_half, Y_half = byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0 = Q0, Er0 = Er0, Ez0 = Ez0, Q1 = Q1, Er1 = Er1, Ez1 = Ez1)
 
-    Y_half = m/2./omega * Bz_half * exp(psif/2.)/rf
-    
-    #diffusive part:
-    Y_half[1:-1] += 1.j /omega * exp(psif[1:-1]*(2.-sigma)/2.)/rf[1:-1] * ((exp(psi*(sigma-1.)/2.)*ee)[1:]-(exp(psi*(sigma-1.)/2.)*ee)[:-1]) / dpsi
-    Y_half[0] += 1.j /omega * exp(psif[0]*(2.-sigma)/2.)/rf[0] * ((exp(psi*(sigma-1.)/2.)*ee)[0]-exp(psi0*(sigma-1.)/2.)*ee0) / dpsi
-    Y_half[-1] += 1.j /omega * exp(psif[-1]*(2.-sigma)/2.) / rf[-1] * (exp(psi1*(sigma-1.)/2.)*ee1-exp(psi[-1]*(sigma-1.)/2.)* ee[-1]) / dpsi
-    
-    # additional terms:
-    if r2norm:
-        Y_half[1:-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[1:]+(r*Ez*exp(psi/2.))[:-1]) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[1:]+(Q*exp(psi/2.)/r)[:-1])
-        Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[0]+(r0*Ez0*exp(psi0/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[0]+(Q0*exp(psi0/2.)/r0))
-        Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[-1]+(r1*Ez1*exp(psi1/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
-    else:
-        Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.) - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
-        Y_half[0] += 0.25 * alpha / omega / z * (Ez[0]+Ez0) * rf[0]*exp(psif[0]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[0] / z * (Q[0]+Q0)
-        Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*exp(psif[-1]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
-    
-    # Y_half[-1] = Y_half[-2] * 2. - Y_half[-3] # !!!should it be this way?
-
-    # Y_half[0] = (2.*Y_half[1]+Y_half[2])/3.
-    if shitswitch:
-        Y_half[0] = -0.5j * exp(psif[0]/2.)/rf[0] * (ee0+ee[0])
-    else:
-        if abmatch:
-            acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-            bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
-            Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff
-        else:
-            Y_half[0] = (2.*Y_half[1]+Y_half[2])/3.
-        
     # QQQQQQQQ
     dQ = 1j * (omega+m) * ee - 1.j * chi * omega * r**2/z**2 * Q
 
@@ -467,6 +471,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     dEz += 0.5 * (aEz[1:]+aEz[:-1])
 
     return dQ, dEr, dEz, dEr_ghost
+
 
 def onerun(icfile, ifpcolor = False):
     # initial conditions involve some value of k and a source file
@@ -639,7 +644,7 @@ def onerun(icfile, ifpcolor = False):
             testplot(exp(psi), ctr, Ez, Ezinit*exp(1j*k*(z-z0)), 'Ez', ztitle=r'$z = {:5.5f}$'.format(z)) # , q0 = Ez0*exp(1j*k*(z-z0)), q1 = Ez1*exp(1j*k*(z-z0)))
             testplot(exp(psi), ctr, Er, Erinit*exp(1j*k*(z-z0)), 'Er', ztitle=r'$z = {:5.5f}$'.format(z), q1 = Er1) #, q0 = Er0*exp(1j*k*(z-z0)), q1 = Er1*exp(1j*k*(z-z0)))
             
-            B, Y = byfun(psi, psif, Q, Er, Ez, z, Er1 = Er1)
+            B, Y = byfun(psi, psif, r, rf, Q, Er, Ez, z, Er1 = Er1)
             
             testplot(exp(psif), ctr, B, Bfinit*exp(1j*k*(z-z0)), 'B', ztitle=r'$z = {:5.5f}$'.format(z))
             testplot(exp(psif), ctr, Y, Yfinit*exp(1j*k*(z-z0)), 'Y', ztitle=r'$z = {:5.5f}$'.format(z))
@@ -648,7 +653,10 @@ def onerun(icfile, ifpcolor = False):
             headerstring = 'z = {:10.10f}'.format(z)
             print(headerstring)
             asciiout(fname, headerstring, exp(psi), Q.real, Q.imag, Er.real, Er.imag, Ez.real, Ez.imag)
-            
+            # BY output:
+            fnameBY = outdir+'/pfiverBY{:05d}'.format(ctr)+'.dat'
+            asciiout(fnameBY, headerstring, exp(psif), B.real, B.imag, Y.real, Y.imag)
+
             if ifpcolor:
                 zlist.append(z)
                 q2[ctr,:] = Q.real

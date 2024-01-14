@@ -59,7 +59,7 @@ def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False):
             Ez = concatenate([Ez,Ez1])
         return z, x, Q, Er, Ez
 
-def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0.0, psislice = None):
+def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha = 0.0, psislice = None):
     nk = size(karray)
     if nk <= 1:
         fiver_plot(karray[0], nblocks=nblocks)
