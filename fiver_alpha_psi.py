@@ -47,18 +47,18 @@ else:
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
 chi = alpha * (1.+2.*alpha)/6.
-omega = 0.4
+omega = 1.0
 m = 1 # not applicable for m=0: the scaling shd then be different
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
 npsi = 100
 zmax = 100.
-dzout = 1e-5
+dzout = 1.e-2
 dz0 = 1e-4
 Cdiff = -0.5 # multiplier for diffusion-limited time step
 
-r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
 shitswitch = True # turns on explicit inner BCs
 Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative, and a second-derivative term is added to Ez
@@ -67,8 +67,8 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 # smoothing Y-diffusion parameters
 ifAD = True
 ADr0 = 1./double(npsi)
-ANn = 5.
-AD0 = 20.
+ADn = 5.
+AD0 = 30.
 
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
@@ -238,7 +238,6 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
 
     if Q0 is None:
         Q0 = leftBC(Q[0], Q[1]) # (3.*Q[0]+Q[1])/4.
-        # Q0 = 0. # !!! temporary
     # Er0 = -1.j * (z/z0)**(2.*alpha) * Q0
     if Er0 is None:
         Er0 = -1.j*exp(psi0/2.)/r0*Q0
@@ -265,7 +264,7 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     sigma1 = (sigma+1.)/2.
 
     Bz_half = zeros(npsi+1, dtype=complex128) # B
-    
+        
     Bz_half[1:-1] = 2.j * exp(-sigma1*psif[1:-1]) * ((exp(sigma1*psi)*Q)[1:]-(exp(sigma1*psi)*Q)[:-1])/dpsi / rf[1:-1]**2/omega
     Bz_half[0] = 2.j * exp(-sigma1*psif[0]) * ((exp(sigma1*psi)*Q)[0]-exp(sigma1*psi0)*Q0)/dpsi /rf[0]**2/omega
     Bz_half[-1] = 2.j * exp(-psif[-1]*sigma1) * (exp(sigma1*psi1)*Q1-(exp(sigma1*psi)*Q)[-1])/dpsi/rf[-1]**2/omega
@@ -332,32 +331,9 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
         Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[0]+(r0*Ez0*exp(psi0/2.))) - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[0]+(Q0*exp(psi1/2.)/r0))
         Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*exp(psi/2.))[-1]+(r1*Ez1*exp(psi1/2.))) # - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
     else:
-        Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.) - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
+        Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.)  - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * (Ez[0]+Ez0) * rf[0]*exp(psif[0]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[0] / z * (Q[0]+Q0)
         Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*exp(psif[-1]/2.)#  - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
-
-    # Y_half[0] = Y_half[1]
-    # Y_half[0] = (2.*Y_half[1]+Y_half[2])/3. # fitting a parabola to ensure zero derivative at psi-1/2
-    # acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-    # bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
-    
-    # Y_half[-1] = Y_half[-2] * 2. - Y_half[-3] # !!!should it be this way?
-    
-    '''
-    if shitswitch:
-        Y_half[0] = -0.5j * exp(psif[0]/2.)/rf[0] * (ee0+ee[0])
-
-    else:
-        if abmatch:
-            acoeff = (Y_half[2]-Y_half[1])/(exp(2.*psif[2])-exp(2.*psif[1]))
-            bcoeff = (Y_half[1]*exp(2.*psif[2])-Y_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
-            Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff
-        else:
-            Y_half[0] = (2.*Y_half[1]+Y_half[2])/3.
-    '''
-    # Y_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
-
-    # Y_half[-1]= -Y_half[-1] # why>??
 
     return Bz_half, Y_half
 
@@ -453,7 +429,6 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     sigma1 = (sigma+1.)/2.
     
     Bz_half, Y_half = byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0 = Q0, Er0 = Er0, Ez0 = Ez0, Q1 = Q1, Er1 = Er1, Ez1 = Ez1, adddiff=not(Ydiffswitch))
-    
 
     # QQQQQQQQ
     dQ = 1j * (omega+m) * ee - 1.j * chi * omega * r**2/z**2 * Q
@@ -466,12 +441,6 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     
     # trying to evolve the ghost zone:
     dEr_ghost = 1.j * (m * exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1] - alpha / z * (1.+1.j * alpha * omega * rf1**2/z) * Er1
-    # dEr_ghost = 2.j * (exp(psif/2.)/rf * Bz_half - omega * Y_half)[-1]-dEr[-1] #!!!
-    
-    # Ez
-    
-    # dEz += - (sigma+3.) * (Y_half[1:]+Y_half[:-1])/2./(exp(psi/2.)*r) - 2. / exp(psi/2.)/r * (Y_half[1:]-Y_half[:-1])/dpsi - sigma1 / r**2 * (Bz_half[1:]+Bz_half[:-1]) - 2. /r**2 * (Bz_half[1:]-Bz_half[:-1])/dpsi
-    
     # Y part:
 
     # an attempt to rewrite it as a diffusion term without Y
@@ -485,29 +454,11 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
         dEz_fluxright = (exp(psif*(sigma+3.)/2.)*Y_half)[1:]
         dEz_fluxleft = (exp(psif*(sigma+3.)/2.)*Y_half)[:-1]
         
-        # smoothed fluxes:
-        dEz_fluxright1 = copy(dEz_fluxright)
-        dEz_fluxleft1 = copy(dEz_fluxleft)
-        # dEz_fluxright1[1:-1] = (dEz_fluxright[1:-1]*2. + dEz_fluxright[2:]+dEz_fluxright[:-2])/4.
-        # dEz_fluxleft1[1:-1] = (dEz_fluxleft[1:-1]*2. + dEz_fluxleft[2:]+dEz_fluxleft[:-2])/4.
-        # dEz_fluxright1[1:-1] = Cmaximum(dEz_fluxright[1:-1], dEz_fluxright[2:])
-        # dEz_fluxleft1[1:-1] = Cminimum(dEz_fluxleft[1:-1], dEz_fluxleft[:-2])
-        # (dEz_fluxright[1:-1] + dEz_fluxright[:-2])/2. # (dEz_fluxright[1:-1]*2. + dEz_fluxright[2:]+dEz_fluxright[:-2])/4.
-        # dEz_fluxleft1[1:-1] = (dEz_fluxleft[1:-1]*2. + dEz_fluxleft[2:]+dEz_fluxleft[:-2])/4.
-        # (dEz_fluxleft[1:-1] + dEz_fluxleft[2:])/2.  # +dEz_fluxleft[:-2])/4.
-
-        # dEz = - 2. * (exp(-psi*(4.+sigma)/2.) * ((exp(psif*(sigma+3.)/2.)*Y_half)[1:]-(exp(psif*(sigma+3.)/2.)*Y_half)[:-1])/dpsi) / r
-        # phi = FL_phi(rr)
-        # print("rr coeff = ", rr)
-        # ii = input('P')
-        # wright = abs(Y_half)[1:] > (abs(Y_half)[:-1]*(1.+5.*dpsi))
-        # wleft = abs(Y_half)[:-1] > (abs(Y_half)[1:]*(1.+5.*dpsi))
-        # dEz = - 2. * exp(-psi*(4.+sigma)/2.)/r * (dEz_fluxright - dEz_fluxleft )/dpsi
         dEz = - 2. * exp(-psi*(4.+sigma)/2.)/r * (dEz_fluxright - dEz_fluxleft) /dpsi
         # anomalous diffusion:
         if ifAD:
             ADr = FL_halfstep(exp(psif*(sigma+3.)/2.)*Y_half)
-            phi = AD0*maximum((ADr-ADr0)/(ADr+ADr0),0.)**nn*(ADr+ADr0)
+            phi = AD0*maximum((ADr-ADr0)/(ADr+ADr0),0.)**ADn*(ADr+ADr0)
 
             dEz[1:-1] += -phi[1:-1] * exp(-psi[1:-1]*(4.+sigma)/2.) * ((exp(psi*(sigma+3.)/2.)*Ez)[1:-1]*2. - (exp(psi*(sigma+3.)/2.)*Ez)[2:] - (exp(psi*(sigma+3.)/2.)*Ez)[:-2])/dpsi**2
             dEz[0] += -phi[0] *exp(-psi[0]*(4.+sigma)/2.) * ((exp(psi*(sigma+3.)/2.)*Ez)[0]*2. - (exp(psi*(sigma+3.)/2.)*Ez)[1] - exp(psi0*(sigma+3.)/2.)*Ez0)/dpsi**2
@@ -540,6 +491,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
 
 
 def onerun(icfile, ifpcolor = False):
+    global omega
     # initial conditions involve some value of k and a source file
     # k is read from the file, omega and m do not need to coincide with the global omega and m
     
@@ -578,6 +530,12 @@ def onerun(icfile, ifpcolor = False):
     
     lines = loadtxt(icfile)
     omega1, m1, R01, kre, kim = lines[0,:]
+    
+    if abs(omega-omega1) > 1e-3 * (abs(omega)+abs(omega1)):
+        print("omega not consistent!")
+        print("changed from", omega, "to ", omega1)
+        omega = omega1
+    
     r1 = lines[1:,0]
     qre1 = lines[1:,1]  ;   qim1 = lines[1:,2]
     yre1 = lines[1:,3]  ;   yim1 = lines[1:,4]
@@ -599,6 +557,7 @@ def onerun(icfile, ifpcolor = False):
     Q = (qrefun(psi) + 1.j * qimfun(psi)) * (Rout/R01)**2
     Y = (yrefun(psi) + 1.j * yimfun(psi))
     
+    '''
     if (rpole < Rout) and (rpole > Rin):
         Qpole = (qrefun(rtopsi(rpole/Rout, z0)) + 1.j * qimfun(rtopsi(rpole/Rout, z0))) * (Rout/R01)**2
         Ypole = (yrefun(rtopsi(rpole/Rout, z0)) + 1.j * yimfun(rtopsi(rpole/Rout, z0)))
@@ -607,21 +566,12 @@ def onerun(icfile, ifpcolor = False):
         # ii = input('N')
     else:
         Npole = 0.
-
+    '''
     # now we need the initial conditions for Er and Ez
     Ez = k / (omega+m) * Q # Ez/r^sigma+1
-    Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y - Npole) / (m + k*r**2) # Bz / r^sigma+1
+    Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y) / (m + k*r**2) # Bz / r^sigma+1
     Er = m / k * Bz - omega/k * Y - 2.j / (omega+m) * Q # Er/r^sigma
 
-    clf()
-    plot((m+k*r**2).real, ((2.j * k /(omega+m) * Q + (2.*omega+m) * Y)).real, 'k-')
-    plot((m+k*r**2).real, ((2.j * k /(omega+m) * Q + (2.*omega+m) * Y)-Npole).real, 'k:')
-    plot([0.], [Npole], 'rx')
-    plot([-0.1,0.1], [0.,0.], 'b-')
-    plot([0.,0.], [-0.1,0.1], 'b-')
-    xlim(-0.1, 0.1) ; ylim(-0.1, 0.1)
-    savefig('Btest.png')
-    # ii = input('B')
 
     Qinit = copy(Q)
     Ezinit = copy(Ez)
@@ -629,6 +579,14 @@ def onerun(icfile, ifpcolor = False):
     Yinit = copy(Y)
     Yfinit = (yrefun(psif) + 1.j * yimfun(psif))
     Bfinit = (2.j * k /(omega+m) * (qrefun(psif) + 1.j * qimfun(psif)) * (Rout/R01)**2 + (2.*omega+m) * (yrefun(psif) + 1.j * yimfun(psif))) / (m + k*rf**2) # Bz / r^sigma+1
+
+    '''
+    clf()
+    plot(rf, Bfinit)
+    plot(r, Bz, 'k:')
+    savefig('Btest.png')
+    ii = input('Y')
+    '''
 
     Q0 = (qrefun(psi0) + 1.j * qimfun(psi0)) * (Rout/R01)**2
     Y0 = (yrefun(psi0) + 1.j * yimfun(psi0))
@@ -785,4 +743,4 @@ def onerun(icfile, ifpcolor = False):
 
 if(size(sys.argv)>1):
     # if alpha is set, the simulation starts automatically
-    onerun('qysol_o0.4_m1.dat', ifpcolor = True)
+    onerun('qysol_o1.0_m1.dat', ifpcolor = True)

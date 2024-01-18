@@ -33,7 +33,7 @@ dr0 = 1e-2
 tol = 1e-4
 drmin = 1e-4
 
-# omega = 0.5
+# omega = 1.0
 # m = 1
 
 def sslopefun(omega, m):
@@ -164,7 +164,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     r = drmin
     dr = drmin
     
-    while(r<R0*(1.+0.1*ifplot)):
+    while(r<R0*(1.+0.01*ifplot)):
         dQ = RHSQQ(r,k, omega, m)*Q + RHSQY(r,k, omega, m) * Y
         dY = RHSYQ(r,k, omega, m)*Q + RHSYY(r,k, omega, m) * Y
         

@@ -9,6 +9,12 @@ from pylab import *
 
 # visualization routines
 
+# TODO: make them readable!
+omega = 1.0
+m = 1
+R0 = 1.0
+z0 = 10.
+
 formatsequence = ['k-', 'r:', 'g--', 'b-.', 'm--.']
 nformats = size(formatsequence)
 
@@ -203,7 +209,6 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             ylabel(r'$z$')
             savefig(ddir+'/Erabs.png')
             if ifBY:
-                z0 = 10. ; omega = 0.4 ; m = 1
                 clf()
                 pcolor(xf, zlist, log10(abs(b2))) # assuming x is the same
                 cb = colorbar()
@@ -246,8 +251,6 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     savefig(ddir+'/growthcurve.png')
 
     if ifBY:
-        
-        omega=0.4 ;  m =1 ; z0 = 10. # kostylj
         # ezhalf = (ez2[:,0]+ez2[:,1])/2.
         # erhalf = (er2[:,0]+er2[:,1])/2.
         ezhalf = ez2[:,0] # -(ez2[:,1]-ez2[:,0])/2. ;
