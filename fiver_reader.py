@@ -35,7 +35,7 @@ def asciiread(fname, ifBY = False):
     if ifBY:
         bre = lines[:,1] ; bim = lines[:,2]
         yre = lines[:,3] ; yim = lines[:,4]
-        return z, x, bre+1.j*bim, bre+1.j*bim
+        return z, x, bre+1.j*bim, yre+1.j*yim
     else:
         qre = lines[:,1] ; qim = lines[:,2]
         erre = lines[:,3] ; erim = lines[:,4]
@@ -90,7 +90,8 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         ctr  = 0
         for k in karray:
             z, x, Q, Er, Ez = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1))
-            z, xf, B, Y = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1), ifBY = True)
+            if ifBY:
+                z, xf, B, Y = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1), ifBY = True)
 
             if p2d and (ctr == 0):
                 zlist = []
@@ -202,6 +203,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             ylabel(r'$z$')
             savefig(ddir+'/Erabs.png')
             if ifBY:
+                z0 = 10. ; omega = 0.4 ; m = 1
                 clf()
                 pcolor(xf, zlist, log10(abs(b2))) # assuming x is the same
                 cb = colorbar()
@@ -211,13 +213,24 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 xlabel(r'$\psi$')
                 ylabel(r'$z$')
                 savefig(ddir+'/Babs.png')
-                pcolor(xf, zlist, log10(abs(y2))) # assuming x is the same
+                clf()
+                fig=figure()
+                pcolor(xf, zlist, log10(abs(y2)), vmin = -2.0, vmax = 0.5) # assuming x is the same
                 cb = colorbar()
                 cb.set_label(r'$\log_{10}|Y|$')
                 contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
                 # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
+                plot(x, z0 + x / (2.*sqrt((omega+m)/omega)) , 'k:')
+                plot(x, z0 + (x[-1]-x) / (2.*sqrt((omega+m)/omega)) , 'k:')
+                plot(x, z0 + (x[-1]-x) / (200.) , 'r:')
+                # plot(x, z0 + (x[0]**1.5-x**1.5)*3./sqrt(2.*omega), 'k:')
+                # plot(x, z0 - (log(x)+log(x.min()))/double(1e3), 'k:')
+                # plot(x, z0 + (log(x)-2.*log(x.min()))/double(1e3), 'k:')
+                # plot(x, z0 + 1e-4 * arange(size(x)), 'k:')
                 xlabel(r'$\psi$')
                 ylabel(r'$z$')
+                ylim(z2.min(), z2.max())
+                fig.tight_layout()
                 savefig(ddir+'/Yabs.png')
 
 
@@ -232,6 +245,42 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     legend()
     savefig(ddir+'/growthcurve.png')
 
+    if ifBY:
+        
+        omega=0.4 ;  m =1 ; z0 = 10. # kostylj
+        # ezhalf = (ez2[:,0]+ez2[:,1])/2.
+        # erhalf = (er2[:,0]+er2[:,1])/2.
+        ezhalf = ez2[:,0] # -(ez2[:,1]-ez2[:,0])/2. ;
+        erhalf = er2[:,0] # -(er2[:,1]-er2[:,0])/2.
+
+        # yhalf = (y2[:,0]+y2[:,1])/2.
+        # bhalf = (b2[:,0]+b2[:,1])/2.
+
+        bhalf = b2[:,0] ; yhalf = y2[:,0]
+
+        ycheck = - 1.j * (z/z0)**(-alpha) * (ezhalf + alpha/(z/z0)**(1.-alpha)*erhalf)
+        bcheck = 2.j*(1.-omega)/m * (ezhalf + alpha/z**(1.-alpha)*erhalf) - 1.j*ezhalf
+
+        print("Y0 = ", ycheck[0])
+        print("Y0half = ", yhalf[0])
+
+        absnormY = maximum(abs(ycheck), abs(y2[:,0]))
+        absnormB = maximum(abs(bcheck), abs(b2[:,0]))
+
+        # absnormB = 1. ; absnormY = 1.
+
+        clf()
+        fig = figure()
+        plot(zlist, (yhalf-ycheck).real/absnormY, 'k:', label=r'$\Re (Y-Y_0)/\max(|Y|, |Y_0|)$')
+        plot(zlist, (yhalf-ycheck).imag/absnormY, 'k--', label=r'$\Im (Y-Y_0)/\max(|Y|, |Y_0|)$')
+        plot(zlist, (bhalf-bcheck).real/absnormB, 'r:', label=r'$\Re (B-B_0)/\max(|B|, |B_0|)$')
+        plot(zlist, (bhalf-bcheck).imag/absnormB, 'r--', label=r'$\Im (B-B_0)/\max(|B|, |B_0|)$')
+        legend()
+        fig.set_size_inches(15.,5.)
+        title(r'$\alpha = {:1.3f}$'.format(alpha))
+        xlabel(r'$z$')
+        savefig(ddir+'/BCcheck.png')
+
     if psislice is not None:
         z = asarray(zlist)
         k = -2.6139953464141414 # kostylj
@@ -244,6 +293,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         plot(zlist, (q2.real)[:,wpsi], 'k:')
         plot(zlist, (q2.imag)[:,wpsi], 'k--')
         fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
         xlabel(r'$z$')
         savefig(ddir+'/zsliceQ.png')
         clf()
@@ -254,8 +304,20 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         plot(zlist, (er2.real)[:,wpsi], 'k:')
         plot(zlist, (er2.imag)[:,wpsi], 'k--')
         fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
         xlabel(r'$z$')
         savefig(ddir+'/zsliceEr.png')
+        clf()
+        fig = figure()
+        plot(zlist, (ez2[0,wpsi] * exp(1.j * k * (z-z[0]))).real, 'r:')
+        plot(zlist, (ez2[0,wpsi] * exp(1.j * k * (z-z[0]))).imag, 'r--')
+        plot(zlist, abs(ez2)[:,wpsi], 'k-')
+        plot(zlist, (ez2.real)[:,wpsi], 'k:')
+        plot(zlist, (ez2.imag)[:,wpsi], 'k--')
+        fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
+        xlabel(r'$z$')
+        savefig(ddir+'/zsliceEz.png')
 
 
 def fiver_plot(k, nblocks=0, ddir = 'paralpha0.0'):

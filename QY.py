@@ -164,7 +164,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     r = drmin
     dr = drmin
     
-    while(r<R0*(1.+0.0*ifplot)):
+    while(r<R0*(1.+0.1*ifplot)):
         dQ = RHSQQ(r,k, omega, m)*Q + RHSQY(r,k, omega, m) * Y
         dY = RHSYQ(r,k, omega, m)*Q + RHSYY(r,k, omega, m) * Y
         
