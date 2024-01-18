@@ -22,7 +22,7 @@ def rfun(z, psi, alpha, z0=10.):
     else:
         return z/z0 * sqrt((1.-sqrt(1.-4.*chi*psi*(z/z0)**(2.*(alpha-1.))))/2./chi)
 
-def asciiread(fname):
+def asciiread(fname, ifBY = False):
 
     f = open(fname, "r")
     s = f.readline() # header string
@@ -32,34 +32,55 @@ def asciiread(fname):
     # bulk of the data
     lines = loadtxt(fname)
     x = lines[:,0]
-    qre = lines[:,1] ; qim = lines[:,2]
-    erre = lines[:,3] ; erim = lines[:,4]
-    ezre = lines[:,5] ; ezim = lines[:,6]
+    if ifBY:
+        bre = lines[:,1] ; bim = lines[:,2]
+        yre = lines[:,3] ; yim = lines[:,4]
+        return z, x, bre+1.j*bim, yre+1.j*yim
+    else:
+        qre = lines[:,1] ; qim = lines[:,2]
+        erre = lines[:,3] ; erim = lines[:,4]
+        ezre = lines[:,5] ; ezim = lines[:,6]
+        return z, x, qre+1.j*qim, erre+1.j*erim, ezre+1.j*ezim
 
-    return z, x, qre+1.j*qim, erre+1.j*erim, ezre+1.j*ezim
-
-def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False):
+def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False, ifBY = False):
     '''
     reads a single snapshot stored as multiple dat files
     nblocks controls the number of mesh blocks we need to combine
     'seq' allows to read sequential data (no effect if nblocks >1)
     '''
+    # TODO: par support for BY
     if nblocks <=1:
         if seq:
-            return asciiread(ddir+'/pfiver{:05d}'.format(k)+'.dat')
+            if ifBY:
+                return asciiread(ddir+'/pfiverBY{:05d}'.format(k)+'.dat', ifBY=ifBY)
+            else:
+                return asciiread(ddir+'/pfiver{:05d}'.format(k)+'.dat', ifBY=ifBY)
         else:
-            return asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat')
+            return asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY=ifBY)
     else:
-        z, x, Q, Er, Ez = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat')
+        if ifBY:
+            z, x, B, Y = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = True)
+        else:
+            z, x, Q, Er, Ez = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = False)
         for j in arange(nblocks-1)+1:
-            z1, x1, Q1, Er1, Ez1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(j)+'.dat')
+            if ifBY:
+                z1, x1, B1, Y1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = True)
+            else:
+                z1, x1, Q1, Er1, Ez1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = False)
             x = concatenate([x,x1])
-            Q = concatenate([Q,Q1])
-            Er = concatenate([Er,Er1])
-            Ez = concatenate([Ez,Ez1])
-        return z, x, Q, Er, Ez
-
-def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0.0, psislice = None):
+            if ifBY:
+                B = concatenate([B, B1])
+                Y = concatenate([Y, Y1])
+            else:
+                Q = concatenate([Q,Q1])
+                Er = concatenate([Er,Er1])
+                Ez = concatenate([Ez,Ez1])
+        if BY:
+            return z, x, B, Y
+        else:
+            return z, x, Q, Er, Ez
+        
+def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha = 0.0, psislice = None, ifBY = False):
     nk = size(karray)
     if nk <= 1:
         fiver_plot(karray[0], nblocks=nblocks)
@@ -69,6 +90,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
         ctr  = 0
         for k in karray:
             z, x, Q, Er, Ez = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1))
+            if ifBY:
+                z, xf, B, Y = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1), ifBY = True)
+
             if p2d and (ctr == 0):
                 zlist = []
                 nz = size(karray)
@@ -76,9 +100,13 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
                 q2 = zeros([nz, nx], dtype=complex)
                 ez2 = zeros([nz, nx], dtype=complex)
                 er2 = zeros([nz, nx], dtype=complex)
+                if ifBY:
+                    b2 = zeros([nz, nx+1], dtype=complex)
+                    y2 = zeros([nz, nx+1], dtype=complex)
                 qmax = zeros(nz, dtype = complex)
                 ermax = zeros(nz, dtype = complex)
                 ezmax = zeros(nz, dtype = complex)
+                
             ztitle=r'$z = {:5.5f}$'.format(z)
             axs[0].plot(x, Q.real, formatsequence[ctr%nformats], label=ztitle)
             axs[1].plot(x, Q.imag, formatsequence[ctr%nformats], label=ztitle)
@@ -86,6 +114,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
                 q2[ctr,:] = Q
                 ez2[ctr,:] = Ez
                 er2[ctr,:] = Er
+                if ifBY:
+                    b2[ctr,:] = B
+                    y2[ctr,:] = Y
                 qmax[ctr] = abs(Q).max()
                 ermax[ctr] = abs(Er).max()
                 ezmax[ctr] = abs(Ez).max()
@@ -171,6 +202,37 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             savefig(ddir+'/Erabs.png')
+            if ifBY:
+                z0 = 10. ; omega = 0.4 ; m = 1
+                clf()
+                pcolor(xf, zlist, log10(abs(b2))) # assuming x is the same
+                cb = colorbar()
+                cb.set_label(r'$\log_{10}|B|$')
+                contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
+                # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
+                xlabel(r'$\psi$')
+                ylabel(r'$z$')
+                savefig(ddir+'/Babs.png')
+                clf()
+                fig=figure()
+                pcolor(xf, zlist, log10(abs(y2)), vmin = -2.0, vmax = 0.5) # assuming x is the same
+                cb = colorbar()
+                cb.set_label(r'$\log_{10}|Y|$')
+                contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
+                # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
+                plot(x, z0 + x / (2.*sqrt((omega+m)/omega)) , 'k:')
+                plot(x, z0 + (x[-1]-x) / (2.*sqrt((omega+m)/omega)) , 'k:')
+                plot(x, z0 + (x[-1]-x) / (200.) , 'r:')
+                # plot(x, z0 + (x[0]**1.5-x**1.5)*3./sqrt(2.*omega), 'k:')
+                # plot(x, z0 - (log(x)+log(x.min()))/double(1e3), 'k:')
+                # plot(x, z0 + (log(x)-2.*log(x.min()))/double(1e3), 'k:')
+                # plot(x, z0 + 1e-4 * arange(size(x)), 'k:')
+                xlabel(r'$\psi$')
+                ylabel(r'$z$')
+                ylim(z2.min(), z2.max())
+                fig.tight_layout()
+                savefig(ddir+'/Yabs.png')
+
 
     # growth curves:
     clf()
@@ -182,6 +244,42 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
     xscale('log')
     legend()
     savefig(ddir+'/growthcurve.png')
+
+    if ifBY:
+        
+        omega=0.4 ;  m =1 ; z0 = 10. # kostylj
+        # ezhalf = (ez2[:,0]+ez2[:,1])/2.
+        # erhalf = (er2[:,0]+er2[:,1])/2.
+        ezhalf = ez2[:,0] # -(ez2[:,1]-ez2[:,0])/2. ;
+        erhalf = er2[:,0] # -(er2[:,1]-er2[:,0])/2.
+
+        # yhalf = (y2[:,0]+y2[:,1])/2.
+        # bhalf = (b2[:,0]+b2[:,1])/2.
+
+        bhalf = b2[:,0] ; yhalf = y2[:,0]
+
+        ycheck = - 1.j * (z/z0)**(-alpha) * (ezhalf + alpha/(z/z0)**(1.-alpha)*erhalf)
+        bcheck = 2.j*(1.-omega)/m * (ezhalf + alpha/z**(1.-alpha)*erhalf) - 1.j*ezhalf
+
+        print("Y0 = ", ycheck[0])
+        print("Y0half = ", yhalf[0])
+
+        absnormY = maximum(abs(ycheck), abs(y2[:,0]))
+        absnormB = maximum(abs(bcheck), abs(b2[:,0]))
+
+        # absnormB = 1. ; absnormY = 1.
+
+        clf()
+        fig = figure()
+        plot(zlist, (yhalf-ycheck).real/absnormY, 'k:', label=r'$\Re (Y-Y_0)/\max(|Y|, |Y_0|)$')
+        plot(zlist, (yhalf-ycheck).imag/absnormY, 'k--', label=r'$\Im (Y-Y_0)/\max(|Y|, |Y_0|)$')
+        plot(zlist, (bhalf-bcheck).real/absnormB, 'r:', label=r'$\Re (B-B_0)/\max(|B|, |B_0|)$')
+        plot(zlist, (bhalf-bcheck).imag/absnormB, 'r--', label=r'$\Im (B-B_0)/\max(|B|, |B_0|)$')
+        legend()
+        fig.set_size_inches(15.,5.)
+        title(r'$\alpha = {:1.3f}$'.format(alpha))
+        xlabel(r'$z$')
+        savefig(ddir+'/BCcheck.png')
 
     if psislice is not None:
         z = asarray(zlist)
@@ -195,6 +293,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
         plot(zlist, (q2.real)[:,wpsi], 'k:')
         plot(zlist, (q2.imag)[:,wpsi], 'k--')
         fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
         xlabel(r'$z$')
         savefig(ddir+'/zsliceQ.png')
         clf()
@@ -205,8 +304,20 @@ def fiver_plotN(karray, nblocks=0, ddir = 'paralpha0.0/', p2d = False, alpha = 0
         plot(zlist, (er2.real)[:,wpsi], 'k:')
         plot(zlist, (er2.imag)[:,wpsi], 'k--')
         fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
         xlabel(r'$z$')
         savefig(ddir+'/zsliceEr.png')
+        clf()
+        fig = figure()
+        plot(zlist, (ez2[0,wpsi] * exp(1.j * k * (z-z[0]))).real, 'r:')
+        plot(zlist, (ez2[0,wpsi] * exp(1.j * k * (z-z[0]))).imag, 'r--')
+        plot(zlist, abs(ez2)[:,wpsi], 'k-')
+        plot(zlist, (ez2.real)[:,wpsi], 'k:')
+        plot(zlist, (ez2.imag)[:,wpsi], 'k--')
+        fig.set_size_inches(15.,5.)
+        title(r'$\psi = {:1.3f}$'.format(psislice))
+        xlabel(r'$z$')
+        savefig(ddir+'/zsliceEz.png')
 
 
 def fiver_plot(k, nblocks=0, ddir = 'paralpha0.0'):
