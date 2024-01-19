@@ -35,6 +35,8 @@ rc('text', usetex=True)
 # #add amsmath to the preamble
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"] 
 
+import fiver_reader as reader
+
 if(size(sys.argv)>1):
     if csize > 0:
         alpha=double(sys.argv[crank+1])
@@ -47,18 +49,18 @@ else:
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
 chi = alpha * (1.+2.*alpha)/6.
-omega = 1.0
+omega = 0.4
 m = 1 # not applicable for m=0: the scaling shd then be different
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
 npsi = 100
 zmax = 100.
-dzout = 1.e-2
+dzout = 1.e-3
 dz0 = 1e-4
 Cdiff = -0.5 # multiplier for diffusion-limited time step
 
-r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
 shitswitch = True # turns on explicit inner BCs
 Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative, and a second-derivative term is added to Ez
@@ -68,7 +70,12 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 ifAD = True
 ADr0 = 1./double(npsi)
 ADn = 5.
-AD0 = 30.
+AD0 = 20.
+
+# restart block:
+ifrestart = True
+restartn = 879
+ddir = 'pfiver_alpha0.0_omega0.4'
 
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
@@ -205,7 +212,7 @@ def leftBC(y0, y1):
     if we want 0 derivative in the first cell, =y1
     if we want linear extrapolation, = 2.*y0-y1
     '''
-    return y0 # (2.*y0-y1)  # (2.*y0+y1)/3. # (4.*y0-y1)/3. # (y0*2.65-y1)/1.65 # (4.*y0-y1)/3. # (9.*y0-y1)/8.
+    return  1.5*y0-y1*0.5 # (y0*2.65-y1)/1.65 # (4.*y0-y1)/3. # (9.*y0-y1)/8.
 
 def abmatchBC(y0, y1, x0, x1, xg):
     acoeff = (y1-y0)/(x1-x0)
@@ -241,7 +248,7 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     # Er0 = -1.j * (z/z0)**(2.*alpha) * Q0
     if Er0 is None:
         Er0 = -1.j*exp(psi0/2.)/r0*Q0
-        Er0 = leftBC(Er[0], Er[1])
+        # Er0 = leftBC(Er[0], Er[1])
     # Ez0 = Ez[0]
     if Ez0 is None:
         Ez0 = leftBC(Ez[0], Ez[1]) # (3.*Ez[0] + Ez[1])/4.
@@ -282,7 +289,7 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     #     bcoeff = (Bz_half[1]*exp(2.*psif[2])-Bz_half[2]*exp(2.*psif[1]))/(exp(2.*psif[2])-exp(2.*psif[1]))
     #     Bz_half[0] = acoeff * exp(2.*psif[0]) + bcoeff # (2.*Bz_half[1]+Bz_half[2])/3.
     # Bz_half[0] = (m/omega*0.5) * (1.j * (Q[0]/r[0]**2+Q0/r0**2) + (Er[0]/r[0]*exp(-psi[0]/2.)+Er0/r0*exp(-psi0/2.)))
-    
+
     if shitswitch:
         Bz_half[0] = 1.j /m * (1.-omega) * (ee0+ee[0]) - 0.5j * (Ez0+Ez[0])
     '''
@@ -334,6 +341,9 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
         Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*exp(psif[1:-1]/2.)  - 0.25 * alpha * m / omega * (exp(psif/2.)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * (Ez[0]+Ez0) * rf[0]*exp(psif[0]/2.) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[0] / z * (Q[0]+Q0)
         Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*exp(psif[-1]/2.)#  - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
+
+    if shitswitch:
+        Y_half[0] = -1.j * exp(psif[0]/2.)/rf[0] * (ee0+ee[0])/2.
 
     return Bz_half, Y_half
 
@@ -491,122 +501,119 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
 
 
 def onerun(icfile, ifpcolor = False):
-    global omega
+    global omega, z0
     # initial conditions involve some value of k and a source file
     # k is read from the file, omega and m do not need to coincide with the global omega and m
+   
+    if not ifrestart:
+        print(not ifrestart)
+        ii = input("not")
+        z = z0
+        # psi is from Rin/Rout to 1
     
-    z = z0
-    
-    # psi is from Rin/Rout to 1
-    
-    psi0 = rtopsi(Rin/Rout, z0) #  2.*log(Rin/Rout)
-    psi = -psi0 * (arange(npsi)+0.5)/double(npsi) + psi0
-    
-    # print(psi.min(), psi.max())
-    # ii = input('psi')
+        psi0 = rtopsi(Rin/Rout, z0) #  2.*log(Rin/Rout)
+        psi = -psi0 * (arange(npsi)+0.5)/double(npsi) + psi0
+        dpsi = -psi0 / double(npsi)
 
-    dpsi = -psi0 / double(npsi)
+        psif = zeros(npsi+1)
+        psif[1:-1] = (psi[1:]+psi[:-1])/2.
+        psif[0] = psi[0] - dpsi/2. ; psif[-1] = psi[-1] + dpsi/2.
+    
+        psi0 = psi[0]-dpsi
+        psi1 = psi[-1]+dpsi
+    
+        r = rfun(z0, psi)
+        rf = rfun(z0, psif)
+        r0 = rfun(z0, psi[0]-dpsi)
+    
+        # sigma = sslopefun(omega, m)
+        print("sigma = ", sigma)
+        print("dpsi = ", dpsi)
+        # ii = input('rf')
+    
+        lines = loadtxt(icfile)
+        omega1, m1, R01, kre, kim = lines[0,:] #
+    
+        if abs(omega-omega1) > 1e-3 * (abs(omega)+abs(omega1)):
+            print("omega changed from", omega, "to ", omega1)
+            omega = omega1
+    
+        r1 = lines[1:,0]
+        qre1 = lines[1:,1]  ;   qim1 = lines[1:,2]
+        yre1 = lines[1:,3]  ;   yim1 = lines[1:,4]
 
-    psif = zeros(npsi+1)
-    psif[1:-1] = (psi[1:]+psi[:-1])/2.
-    psif[0] = psi[0] - dpsi/2. ; psif[-1] = psi[-1] + dpsi/2.
-    
-    # print("psif = ", psif)
-    # ii  = input('psi')
-    
-    psi0 = psi[0]-dpsi
-    psi1 = psi[-1]+dpsi
-    
-    r = rfun(z0, psi)
-    rf = rfun(z0, psif)
-    r0 = rfun(z0, psi[0]-dpsi)
+        k = kre + 1.j * kim
+        k *= (R01/Rout)**2
 
-    # dr = (r[1:]-r[:-1]).min()
-    
-    # sigma = sslopefun(omega, m)
-    print("sigma = ", sigma)
-    print("dpsi = ", dpsi)
-    # ii = input('rf')
-    
-    lines = loadtxt(icfile)
-    omega1, m1, R01, kre, kim = lines[0,:]
-    
-    if abs(omega-omega1) > 1e-3 * (abs(omega)+abs(omega1)):
-        print("omega not consistent!")
-        print("changed from", omega, "to ", omega1)
-        omega = omega1
-    
-    r1 = lines[1:,0]
-    qre1 = lines[1:,1]  ;   qim1 = lines[1:,2]
-    yre1 = lines[1:,3]  ;   yim1 = lines[1:,4]
+        wsafe = abs(m+k*r1**2) > 0.01 # excluding the region near the signular point
 
-    k = kre + 1.j * kim
-    k *= (R01/Rout)**2
+        rpole = sqrt(m/abs(k))
 
-    wsafe = abs(m+k*r1**2) > 0.01 # excluding the region near the signular point
+        # initial conditions:
+        qrefun = interp1d(rtopsi(r1[wsafe]/R01,z0), qre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+        qimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), qim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+        yrefun = interp1d(rtopsi(r1[wsafe]/R01, z0), yre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
+        yimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), yim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
 
-    rpole = sqrt(m/abs(k))
-
-    # initial conditions:
-    qrefun = interp1d(rtopsi(r1[wsafe]/R01,z0), qre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    qimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), qim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yrefun = interp1d(rtopsi(r1[wsafe]/R01, z0), yre1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-    yimfun = interp1d(rtopsi(r1[wsafe]/R01, z0), yim1[wsafe], bounds_error=False, fill_value = 'extrapolate', kind='linear')
-
-    #  Q and Y normalized by r^sigma
-    Q = (qrefun(psi) + 1.j * qimfun(psi)) * (Rout/R01)**2
-    Y = (yrefun(psi) + 1.j * yimfun(psi))
+        #  Q and Y normalized by r^sigma
+        Q = (qrefun(psi) + 1.j * qimfun(psi)) * (Rout/R01)**2
+        Y = (yrefun(psi) + 1.j * yimfun(psi))
     
-    '''
-    if (rpole < Rout) and (rpole > Rin):
-        Qpole = (qrefun(rtopsi(rpole/Rout, z0)) + 1.j * qimfun(rtopsi(rpole/Rout, z0))) * (Rout/R01)**2
-        Ypole = (yrefun(rtopsi(rpole/Rout, z0)) + 1.j * yimfun(rtopsi(rpole/Rout, z0)))
-        Npole = (2.j * k /(omega+m) * Qpole + (2.*omega+m) * Ypole) # nominator of B
-        print("Npole = ", Npole)
-        # ii = input('N')
+        # now we need the initial conditions for Er and Ez
+        Ez = k / (omega+m) * Q # Ez/r^sigma+1
+        Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y) / (m + k*r**2) # Bz / r^sigma+1
+        Er = m / k * Bz - omega/k * Y - 2.j / (omega+m) * Q # Er/r^sigma
+
+        Qinit = copy(Q)
+        Ezinit = copy(Ez)
+        Erinit = copy(Er)
+        Yinit = copy(Y)
+        Yfinit = (yrefun(psif) + 1.j * yimfun(psif))
+        Bfinit = (2.j * k /(omega+m) * (qrefun(psif) + 1.j * qimfun(psif)) * (Rout/R01)**2 + (2.*omega+m) * (yrefun(psif) + 1.j * yimfun(psif))) / (m + k*rf**2) # Bz / r^sigma+1
+
+        Q0 = (qrefun(psi0) + 1.j * qimfun(psi0)) * (Rout/R01)**2
+        Y0 = (yrefun(psi0) + 1.j * yimfun(psi0))
+        Ez0 = k / (omega+m) * Q0
+        Bz0 = (2j * k /(omega+m) * Q0 + (2.*omega+m) * Y0) / (m + k*r0**2)
+        Er0 = m / k * Bz0 - omega/k * Y0 - 2.j / (omega+m) * Q0 # Er/r^sigma
+    
+        # psi1 = psi[-1]+dpsi
+        psi1f = psif[-1]
+        r1f = rfun(z0, psi1f)
+        Q1 = (qrefun(psi1f) + 1.j * qimfun(psi1f)) * (Rout/R01)**2
+        Y1 = (yrefun(psi1f) + 1.j * yimfun(psi1f))
+        Ez1 = k / (omega+m) * Q1
+        Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
+        Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
+        ctr = 0
     else:
-        Npole = 0.
-    '''
-    # now we need the initial conditions for Er and Ez
-    Ez = k / (omega+m) * Q # Ez/r^sigma+1
-    Bz = (2.j * k /(omega+m) * Q + (2.*omega+m) * Y) / (m + k*r**2) # Bz / r^sigma+1
-    Er = m / k * Bz - omega/k * Y - 2.j / (omega+m) * Q # Er/r^sigma
+        # restart mode
+        ctr = restartn
+        fname = ddir+'/pfiver{:05d}'.format(restartn)+'.dat'
+        fnameBY = ddir+'/pfiverBY{:05d}'.format(restartn)+'.dat'
+        z, psi, Q, Er, Ez = reader.asciiread(fname, ifBY = False)
+        z, psif, B, Y = reader.asciiread(fnameBY, ifBY = True)
+        psi = log(psi) ; psif = log(psif)
+        dpsi = psi[1]-psi[0]
+        psi0 = psi[0]-dpsi
+        psi1 = psi[-1]+dpsi
+        r = rfun(z, psi) ; rf = rfun(z, psif)
+        z0 = z
+        Er1 = Er[-1]*1.5-Er[-2]*0.5
+        # we still need k
+        lines = loadtxt(icfile)
+        omega1, m1, R01, kre, kim = lines[0,:] #
+        k = kre + 1.j * kim
+        k *= (R01/Rout)**2
+        Qinit = copy(Q)
+        Ezinit = copy(Ez)
+        Erinit = copy(Er)
+        Yfinit = copy(Y)
+        Bfinit = copy(B)
 
-
-    Qinit = copy(Q)
-    Ezinit = copy(Ez)
-    Erinit = copy(Er)
-    Yinit = copy(Y)
-    Yfinit = (yrefun(psif) + 1.j * yimfun(psif))
-    Bfinit = (2.j * k /(omega+m) * (qrefun(psif) + 1.j * qimfun(psif)) * (Rout/R01)**2 + (2.*omega+m) * (yrefun(psif) + 1.j * yimfun(psif))) / (m + k*rf**2) # Bz / r^sigma+1
-
-    '''
-    clf()
-    plot(rf, Bfinit)
-    plot(r, Bz, 'k:')
-    savefig('Btest.png')
-    ii = input('Y')
-    '''
-
-    Q0 = (qrefun(psi0) + 1.j * qimfun(psi0)) * (Rout/R01)**2
-    Y0 = (yrefun(psi0) + 1.j * yimfun(psi0))
-    Ez0 = k / (omega+m) * Q0
-    Bz0 = (2j * k /(omega+m) * Q0 + (2.*omega+m) * Y0) / (m + k*r0**2)
-    Er0 = m / k * Bz0 - omega/k * Y0 - 2.j / (omega+m) * Q0 # Er/r^sigma
-    
-    # psi1 = psi[-1]+dpsi
-    psi1f = psif[-1]
-    r1f = rfun(z0, psi1f)
-    Q1 = (qrefun(psi1f) + 1.j * qimfun(psi1f)) * (Rout/R01)**2
-    Y1 = (yrefun(psi1f) + 1.j * yimfun(psi1f))
-    Ez1 = k / (omega+m) * Q1
-    Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
-    Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
-    
     #
     zstore = z0
     nz = int(round(log(zmax/z0)/log(1.+dzout)))
-    ctr = 0
     
     # two-dimensional plot
     if (ifpcolor):
@@ -743,4 +750,4 @@ def onerun(icfile, ifpcolor = False):
 
 if(size(sys.argv)>1):
     # if alpha is set, the simulation starts automatically
-    onerun('qysol_o1.0_m1.dat', ifpcolor = True)
+    onerun('qysol_o0.4_m1.dat', ifpcolor = True)

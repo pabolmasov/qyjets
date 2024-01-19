@@ -364,6 +364,50 @@ def fiver_plot(k, nblocks=0, ddir = 'paralpha0.0'):
     savefig(ddir+'/parfiverEr{:05d}.png'.format(k))
     close()
 
+def comparseq(n1, n2, dir1, dir2):
+    '''
+    compares two sequential files
+    '''
+    z1, x1, Q1, Er1, Ez1 = readnfiles(n1, 0, ddir = dir1, seq=True)
+    z2, x2, Q2, Er2, Ez2 = readnfiles(n2, 0, ddir = dir2, seq=True)
+
+    ztitle1=dir1+r': $z1 = {:5.5f}$'.format(z1)
+    ztitle2=dir2+r': $z2 = {:5.5f}$'.format(z2)
+
+    clf()
+    fig, axs = plt.subplots(2)
+    axs[0].plot(x1, Q1.real, formatsequence[0], label=ztitle1)
+    axs[1].plot(x1, Q1.imag, formatsequence[0], label=ztitle1)
+    axs[0].plot(x2, Q2.real, formatsequence[1], label=ztitle2)
+    axs[1].plot(x2, Q2.imag, formatsequence[1], label=ztitle2)
+    axs[0].set_ylabel(r'$\Re Q$')
+    axs[1].set_ylabel(r'$\Im Q$')
+    axs[0].set_xlabel(r'$\psi$')
+    axs[1].set_xlabel(r'$\psi$')
+    axs[0].set_xscale('log')
+    axs[1].set_xscale('log')
+    axs[1].legend()
+    fig.set_size_inches(5.,8.)
+    fig.tight_layout()
+    savefig('comQs.png')
+    clf()
+    fig, axs = plt.subplots(2)
+    axs[0].plot(x1, Er1.real, formatsequence[0], label=ztitle1)
+    axs[1].plot(x1, Er1.imag, formatsequence[0], label=ztitle1)
+    axs[0].plot(x2, Er2.real, formatsequence[1], label=ztitle2)
+    axs[1].plot(x2, Er2.imag, formatsequence[1], label=ztitle2)
+    axs[0].set_ylabel(r'$\Re E_r$')
+    axs[1].set_ylabel(r'$\Im E_r$')
+    axs[0].set_xlabel(r'$\psi$')
+    axs[1].set_xlabel(r'$\psi$')
+    axs[0].set_xscale('log')
+    axs[1].set_xscale('log')
+    axs[1].legend()
+    fig.set_size_inches(5.,8.)
+    fig.tight_layout()
+    savefig('comErs.png')
+
+
 def comparer(npar, npsi, nblocks=2):
     '''
     compares parallel and sequential data

@@ -30,7 +30,7 @@ Y0 = 1.
 drout = 1e-3
 
 dr0 = 1e-2
-tol = 1e-4
+tol = 1e-5
 drmin = 1e-4
 
 # omega = 1.0
@@ -272,10 +272,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     if isnan(Qlast):
         return [100.,100.]
         
-    if abs(ncrit) > abs(Qlast):
-        return [ncrit.real, ncrit.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
-    else:
-        return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    # if abs(ncrit) > abs(Qlast):
+    #     return [ncrit.real, ncrit.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    # else:
+    return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
 
 def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
     '''
@@ -294,11 +294,13 @@ def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
     kim_plus = zeros(noar)
 
     fout = open('ksoles_m'+str(m)+'.dat', 'w+')
-    fout.write("omega  Re(k-)  Im(k-)  Re(k+)  Im(k+)\n")
+    fout.write("# omega  Re(k-)  Im(k-)  Re(k+)  Im(k+)\n")
     
     for i in arange(noar):
+        print("omega = ", oar[i])
         res = root(onecurve, k0, args = (oar[i], m, R0))
         if res.success:
+            print("first stage complete")
             res_plus = root(onecurve, [res.x[0], -res.x[1]], args = (oar[i], m, R0), tol=1e-8)
             kre[i] = res.x[0]
             kim[i] = res.x[1]
