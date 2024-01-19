@@ -57,11 +57,11 @@ Rout = 1.0
 z0 = 10.
 npsi = 1000
 zmax = 100.
-dzout = 1.e-5
-dz0 = 1e-4
-Cdiff = -0.5 # multiplier for diffusion-limited time step
+dzout = 1.e-3
+dz0 = 5e-5
+Cdiff = 0.5 # multiplier for diffusion-limited time step
 
-r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
 shitswitch = True # turns on explicit inner BCs
 Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative, and a second-derivative term is added to Ez
@@ -70,8 +70,10 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 # smoothing Y-diffusion parameters
 ifAD = True
 ADr0 = 1./double(npsi)
-ADn = 5.
+ADn = 3.
 AD0 = 50.
+
+ifGauss = True
 
 # restart block:
 ifrestart = False
@@ -106,7 +108,7 @@ def testplot(x, ctr, qua, aqua, qname, q0=None, q1 = None, ztitle=''):
     xscale('log')
     # xlim(0.3,0.5)
     fig.tight_layout()
-    savefig(outdir+'/pfiver'+qname+'{:05d}.png'.format(ctr))
+    savefig(outdir+'/lfiver'+qname+'{:05d}.png'.format(ctr))
     close()
 
 def asciiout(fname,s, x, qre, qim, erre, erim, ezre, ezim):
@@ -202,7 +204,7 @@ def leftBC(y0, y1):
     if we want 0 derivative in the first cell, =y1
     if we want linear extrapolation, = 2.*y0-y1
     '''
-    return  1.5*y0-y1*0.5 # (y0*2.65-y1)/1.65 # (4.*y0-y1)/3. # (9.*y0-y1)/8.
+    return  y0 # (y0*2.65-y1)/1.65 # (4.*y0-y1)/3. # (9.*y0-y1)/8.
 
 def abmatchBC(y0, y1, x0, x1, xg):
     acoeff = (y1-y0)/(x1-x0)
@@ -236,7 +238,7 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
         Q0 = leftBC(Q[0], Q[1]) # (3.*Q[0]+Q[1])/4.
     # Er0 = -1.j * (z/z0)**(2.*alpha) * Q0
     if Er0 is None:
-        Er0 = -1.j*exp(psi0/2.)/r0*Q0
+        Er0 = -1.j*sqrt(psi0)/r0*Q0
         # Er0 = leftBC(Er[0], Er[1])
     # Ez0 = Ez[0]
     if Ez0 is None:
@@ -574,30 +576,32 @@ def onerun(icfile, ifpcolor = False):
     # print("psi1  = ", r1)
     # ii =input('Er1')
     csound = 2. * sqrt((omega+m)/omega)
-    dz_CFL = dpsi * exp(psi[0]) / csound
-    ddiff = (dpsi * exp(psi[0]))**2/8. * Cdiff
+    dz_CFL = dpsi  / csound
+    ddiff = dpsi**2/8. * Cdiff
     print("ddiff = ", ddiff)
     # ii = input("D")
+    
+    if ifGauss:
+        Gc = 0.5 ; Gd = 0.1
+        Q = exp(-((psi-Gc)/Gd)**2/2.) + 0.j
+        Er *= 0.
+        Ez *= 0.
+        Er1 = 0.
 
     while(ctr < nz):
-        dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
-        # print(dQ[0], dEr[0], dEz[0])
-        # ii = input('Q')
-        # solamp = maximum(abs(Ez).max(), abs(Er).max())
-        # vez = sqrt(m * (omega+m) / 2. / omega**2 / r)
-        dratQ = abs(dQ).max()/abs(Q)
-        dratEr = abs(dEr).max()/abs(Er)
-        dratEz = abs(dEz).max()/abs(Ez)
-
-        if Cdiff > 0.:
-            if (alpha>0.):
-                ddiff = (dpsi * exp(psi[0]))**2/8. * (z/z0)**(2.*alpha)
-            dz = ddiff
-        else:
+        if Cdiff < 0.:
+            dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
+            dratQ = abs(dQ).max()/abs(Q)
+            dratEr = abs(dEr).max()/abs(Er)
+            dratEz = abs(dEz).max()/abs(Ez)
             dz = median(minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
             if abs(dEr_ghost) > 0.:
                 dzghost = abs(Er).max()/abs(dEr_ghost) * dz0
                 dz = minimum(dz, dzghost)
+        else:
+            if (alpha>0.):
+                ddiff = (dpsi * exp(psi[0]))**2/8. * (z/z0)**(2.*alpha)
+            dz = ddiff
 
         # print(dEz)
         # print(dratQ.min(), dratEr.min(), dratEz.min())
@@ -611,7 +615,7 @@ def onerun(icfile, ifpcolor = False):
         # fixing Er or Ez with 87-89
 
         dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost1*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
         dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost2*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
         dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = Er1+dEr_ghost3*dz, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
 
@@ -643,10 +647,10 @@ def onerun(icfile, ifpcolor = False):
             fname = outdir+'/pfiver{:05d}'.format(ctr)+'.dat'
             headerstring = 'z = {:10.10f}'.format(z)
             print(headerstring)
-            asciiout(fname, headerstring, exp(psi), Q.real, Q.imag, Er.real, Er.imag, Ez.real, Ez.imag)
+            asciiout(fname, headerstring, psi, Q.real, Q.imag, Er.real, Er.imag, Ez.real, Ez.imag)
             # BY output:
             fnameBY = outdir+'/pfiverBY{:05d}'.format(ctr)+'.dat'
-            asciiout_f(fnameBY, headerstring, exp(psif), B.real, B.imag, Y.real, Y.imag)
+            asciiout_f(fnameBY, headerstring, psif, B.real, B.imag, Y.real, Y.imag)
 
             if ifpcolor:
                 zlist.append(z)

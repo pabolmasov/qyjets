@@ -10,7 +10,7 @@ from pylab import *
 # visualization routines
 
 # TODO: make them readable!
-omega = 1.0
+omega = 0.4
 m = 1
 R0 = 1.0
 z0 = 10.
@@ -406,6 +406,22 @@ def comparseq(n1, n2, dir1, dir2):
     fig.set_size_inches(5.,8.)
     fig.tight_layout()
     savefig('comErs.png')
+    clf()
+    fig, axs = plt.subplots(2)
+    axs[0].plot(x1, Ez1.real, formatsequence[0], label=ztitle1)
+    axs[1].plot(x1, Ez1.imag, formatsequence[0], label=ztitle1)
+    axs[0].plot(x2, Ez2.real, formatsequence[1], label=ztitle2)
+    axs[1].plot(x2, Ez2.imag, formatsequence[1], label=ztitle2)
+    axs[0].set_ylabel(r'$\Re E_z$')
+    axs[1].set_ylabel(r'$\Im E_z$')
+    axs[0].set_xlabel(r'$\psi$')
+    axs[1].set_xlabel(r'$\psi$')
+    axs[0].set_xscale('log')
+    axs[1].set_xscale('log')
+    axs[1].legend()
+    fig.set_size_inches(5.,8.)
+    fig.tight_layout()
+    savefig('comEzs.png')
 
 
 def comparer(npar, npsi, nblocks=2):

@@ -29,6 +29,8 @@ Y0 = 1.
 
 drout = 1e-3
 
+rin = 0.0
+
 dr0 = 1e-2
 tol = 1e-5
 drmin = 1e-4
@@ -151,7 +153,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
         
     rlist = [] ; qlist = [] ; ylist = []
     
-    r = 0. ; rstore = 0.
+    rstore = 0.
     Y = 1. + 0.j
     if Q0 is not None:
         Q = Q0
@@ -161,7 +163,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     # maxQ  = 0.
     mk = 0. ; N = 0. ; ncrit = 0.
     
-    r = drmin
+    r = rin+drmin
     dr = drmin
     
     while(r<R0*(1.+0.01*ifplot)):

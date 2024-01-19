@@ -68,12 +68,12 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 
 # smoothing Y-diffusion parameters
 ifAD = True
-ADr0 = 1./double(npsi)
+ADr0 = .5/double(npsi)
 ADn = 5.
-AD0 = 20.
+AD0 = 30.
 
 # restart block:
-ifrestart = True
+ifrestart = False
 restartn = 879
 ddir = 'pfiver_alpha0.0_omega0.4'
 
@@ -506,18 +506,16 @@ def onerun(icfile, ifpcolor = False):
     # k is read from the file, omega and m do not need to coincide with the global omega and m
    
     if not ifrestart:
-        print(not ifrestart)
-        ii = input("not")
         z = z0
         # psi is from Rin/Rout to 1
-    
         psi0 = rtopsi(Rin/Rout, z0) #  2.*log(Rin/Rout)
+        psif = zeros(npsi+1)
+
         psi = -psi0 * (arange(npsi)+0.5)/double(npsi) + psi0
         dpsi = -psi0 / double(npsi)
-
-        psif = zeros(npsi+1)
-        psif[1:-1] = (psi[1:]+psi[:-1])/2.
+        
         psif[0] = psi[0] - dpsi/2. ; psif[-1] = psi[-1] + dpsi/2.
+        psif[1:-1] = (psi[1:]+psi[:-1])/2.
     
         psi0 = psi[0]-dpsi
         psi1 = psi[-1]+dpsi
@@ -663,7 +661,7 @@ def onerun(icfile, ifpcolor = False):
         # fixing Er or Ez with 87-89
 
         dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost1*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
         dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost2*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
         dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = Er1+dEr_ghost3*dz, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
 
@@ -750,4 +748,4 @@ def onerun(icfile, ifpcolor = False):
 
 if(size(sys.argv)>1):
     # if alpha is set, the simulation starts automatically
-    onerun('qysol_o0.4_m1.dat', ifpcolor = True)
+    onerun('qysol_o0.4_m1_rin0.1.dat', ifpcolor = True)
