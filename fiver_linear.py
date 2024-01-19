@@ -55,7 +55,7 @@ sigma = m-1.
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 1000
+npsi = 100
 zmax = 100.
 dzout = 1.e-3
 dz0 = 5e-5
@@ -68,7 +68,7 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 # if it is off, we use flux limiter for Ez
 
 # smoothing Y-diffusion parameters
-ifAD = True
+ifAD = False
 ADr0 = 1./double(npsi)
 ADn = 3.
 AD0 = 50.
@@ -80,7 +80,10 @@ ifrestart = False
 restartn = 879
 ddir = 'lfiver_alpha0.0_omega0.4'
 
-outdir = 'lfiver_alpha'+str(alpha)
+if ifGauss:
+    outdir = 'Glfiver_alpha'+str(alpha)
+else:
+    outdir = 'lfiver_alpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
 
@@ -584,7 +587,7 @@ def onerun(icfile, ifpcolor = False):
     if ifGauss:
         Gc = 0.5 ; Gd = 0.1
         Q = exp(-((psi-Gc)/Gd)**2/2.) + 0.j
-        Er *= 0.
+        Er = -2.j/m * psi**((2.-sigma)/2.) * Q * ((sigma+1.)/2. - (psi-Gc)/Gd**2)
         Ez *= 0.
         Er1 = 0.
 

@@ -183,26 +183,26 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         if p2d: # 2D plotting
             x2, z2 = meshgrid(x, zlist)
             clf()
-            pcolor(x, zlist, log10(abs(q2))) # assuming x is the same
+            pcolor(x, zlist, (abs(q2))) # assuming x is the same
             cb = colorbar()
-            cb.set_label(r'$\log_{10}|Q|$')
+            cb.set_label(r'$|Q|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             savefig(ddir+'/Qabs.png')
             clf()
-            pcolor(x, zlist, log10(abs(ez2))) # assuming x is the same
+            pcolor(x, zlist, (abs(ez2))) # assuming x is the same
             cb = colorbar()
-            cb.set_label(r'$\log_{10}|E_z|$')
+            cb.set_label(r'$|E_z|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             savefig(ddir+'/Ezabs.png')
             clf()
-            pcolor(x, zlist, log10(abs(er2))) # assuming x is the same
+            pcolor(x, zlist, (abs(er2))) # assuming x is the same
             cb = colorbar()
-            cb.set_label(r'$\log_{10}|E_r|$')
+            cb.set_label(r'$|E_r|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
@@ -241,6 +241,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
 
     # growth curves:
     clf()
+    fig = figure()
     plot(zlist, qmax, formatsequence[0], label=r'$\max |Q|$')
     plot(zlist, ezmax, formatsequence[1], label=r'$\max |E_z|$')
     plot(zlist, ermax, formatsequence[2], label=r'$\max |E_r|$')
@@ -248,6 +249,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     yscale('log')
     xscale('log')
     legend()
+    fig.set_size_inches(8.,4.)
     savefig(ddir+'/growthcurve.png')
 
     if ifBY:

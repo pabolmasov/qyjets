@@ -72,11 +72,17 @@ ADr0 = .5/double(npsi)
 ADn = 5.
 AD0 = 30.
 
+ifGauss = True
+Gc = 0.5
+Gd = 0.1
+
 # restart block:
 ifrestart = False
 restartn = 879
 ddir = 'pfiver_alpha0.0_omega0.4'
 
+if ifGauss:
+    outdir = 'Gpfiver_alpha'+str(alpha)
 outdir = 'pfiver_alpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
@@ -584,6 +590,13 @@ def onerun(icfile, ifpcolor = False):
         Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
         Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
         ctr = 0
+        
+        if ifGauss:
+            Q = exp(-((psi-Gc)/Gd)**2/2.) + 0.j
+            Er = -2.j/m * psi**((2.-sigma)/2.) * Q * ((sigma+1.)/2. - (psi-Gc)/Gd**2)
+            Ez *= 0.
+            Er1 = 0.
+
     else:
         # restart mode
         ctr = restartn
