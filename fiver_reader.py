@@ -15,6 +15,15 @@ m = 1
 R0 = 1.0
 z0 = 10.
 
+#Uncomment the following if you want to use LaTeX in figures
+rc('font',**{'family':'serif'})
+rc('mathtext',fontset='cm')
+rc('mathtext',rm='stix')
+rc('text', usetex=True)
+# #add amsmath to the preamble
+matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"]
+
+
 formatsequence = ['k-', 'r:', 'g--', 'b-.', 'm--.']
 nformats = size(formatsequence)
 
@@ -141,93 +150,109 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         savefig(ddir+'/parfiverQs.png'.format(k))
         close()
         # Ez:
-        clf()
-        fig, axs = plt.subplots(2)
-        ctr=0
-        for k in karray:
-            # ztitle=r'$z = {:5.5f}$'.format(z)
-            axs[0].plot(x, ez2[ctr,:].real, formatsequence[ctr%nformats], label=zlist[ctr])
-            axs[1].plot(x, ez2[ctr,:].imag, formatsequence[ctr%nformats], label=zlist[ctr])
-            ctr+=1
-        axs[0].set_ylabel(r'$\Re E_z$')
-        axs[1].set_ylabel(r'$\Im E_z$')
-        axs[0].set_xlabel(r'$\psi$')
-        axs[1].set_xlabel(r'$\psi$')
-        axs[0].set_xscale('log')
-        axs[1].set_xscale('log')
-        if nk < 10:
-            axs[1].legend()
-        fig.set_size_inches(5.,8.)
-        fig.tight_layout()
-        savefig(ddir+'/parfiverEzs.png'.format(k))
-        # Er:
-        clf()
-        fig, axs = plt.subplots(2)
-        ctr=0
-        for k in karray:
-            # ztitle=r'$z = {:5.5f}$'.format(z)
-            axs[0].plot(x, er2[ctr,:].real, formatsequence[ctr%nformats], label=zlist[ctr])
-            axs[1].plot(x, er2[ctr,:].imag, formatsequence[ctr%nformats], label=zlist[ctr])
-            ctr+=1
-        axs[0].set_ylabel(r'$\Re E_r$')
-        axs[1].set_ylabel(r'$\Im E_r$')
-        axs[0].set_xlabel(r'$\psi$')
-        axs[1].set_xlabel(r'$\psi$')
-        axs[0].set_xscale('log')
-        axs[1].set_xscale('log')
-        if nk < 10:
-            axs[1].legend()
-        fig.set_size_inches(5.,8.)
-        fig.tight_layout()
-        savefig(ddir+'/parfiverErs.png'.format(k))
+        if nk < 100:
+            clf()
+            fig, axs = plt.subplots(2)
+            ctr=0
+            for k in karray:
+                # ztitle=r'$z = {:5.5f}$'.format(z)
+                axs[0].plot(x, ez2[ctr,:].real, formatsequence[ctr%nformats], label=zlist[ctr])
+                axs[1].plot(x, ez2[ctr,:].imag, formatsequence[ctr%nformats], label=zlist[ctr])
+                ctr+=1
+            axs[0].set_ylabel(r'$\Re E_z$')
+            axs[1].set_ylabel(r'$\Im E_z$')
+            axs[0].set_xlabel(r'$\psi$')
+            axs[1].set_xlabel(r'$\psi$')
+            axs[0].set_xscale('log')
+            axs[1].set_xscale('log')
+            if nk < 10:
+                axs[1].legend()
+            fig.set_size_inches(5.,8.)
+            fig.tight_layout()
+            savefig(ddir+'/parfiverEzs.png'.format(k))
+            # Er:
+            clf()
+            fig, axs = plt.subplots(2)
+            ctr=0
+            for k in karray:
+                # ztitle=r'$z = {:5.5f}$'.format(z)
+                axs[0].plot(x, er2[ctr,:].real, formatsequence[ctr%nformats], label=zlist[ctr])
+                axs[1].plot(x, er2[ctr,:].imag, formatsequence[ctr%nformats], label=zlist[ctr])
+                ctr+=1
+            axs[0].set_ylabel(r'$\Re E_r$')
+            axs[1].set_ylabel(r'$\Im E_r$')
+            axs[0].set_xlabel(r'$\psi$')
+            axs[1].set_xlabel(r'$\psi$')
+            axs[0].set_xscale('log')
+            axs[1].set_xscale('log')
+            if nk < 10:
+                axs[1].legend()
+            fig.set_size_inches(5.,8.)
+            fig.tight_layout()
+            savefig(ddir+'/parfiverErs.png'.format(k))
         if p2d: # 2D plotting
             x2, z2 = meshgrid(x, zlist)
             clf()
+            fig = figure()
             pcolor(x, zlist, (abs(q2))) # assuming x is the same
             cb = colorbar()
-            cb.set_label(r'$|Q|$')
+            # cb.set_label(r'$|Q|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             xlabel(r'$\psi$')
             ylabel(r'$z$')
+            title(r'$|Q|$')
+            fig.set_size_inches(5.,8.)
+            fig.tight_layout()
             savefig(ddir+'/Qabs.png')
             clf()
+            fig = figure()
             pcolor(x, zlist, (abs(ez2))) # assuming x is the same
+            title(r'$|E_z|$')
             cb = colorbar()
-            cb.set_label(r'$|E_z|$')
+            # cb.set_label(r'$|E_z|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
             ylabel(r'$z$')
+            fig.set_size_inches(5.,8.)
+            fig.tight_layout()
             savefig(ddir+'/Ezabs.png')
             clf()
             pcolor(x, zlist, (abs(er2))) # assuming x is the same
             cb = colorbar()
-            cb.set_label(r'$|E_r|$')
+            # cb.set_label(r'$|E_r|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
+            title(r'$|E_r|$')
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
             xlabel(r'$\psi$')
             ylabel(r'$z$')
+            
+            fig.set_size_inches(5.,8.)
+            fig.tight_layout()
             savefig(ddir+'/Erabs.png')
             if ifBY:
                 clf()
-                pcolor(xf, zlist, log10(abs(b2))) # assuming x is the same
+                fig = figure()
+                pcolor(xf, zlist, (abs(b2))) # assuming x is the same
                 cb = colorbar()
-                cb.set_label(r'$\log_{10}|B|$')
+                cb.set_label(r'$|B|$')
                 contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
                 # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
                 xlabel(r'$\psi$')
                 ylabel(r'$z$')
+                fig.set_size_inches(5.,8.)
+                fig.tight_layout()
                 savefig(ddir+'/Babs.png')
                 clf()
                 fig=figure()
-                pcolor(xf, zlist, log10(abs(y2)), vmin = -2.0, vmax = 0.5) # assuming x is the same
+                pcolor(xf, zlist, (abs(y2))) # , vmin = -2.0, vmax = 0.5) # assuming x is the same
                 cb = colorbar()
-                cb.set_label(r'$\log_{10}|Y|$')
+                cb.set_label(r'$|Y|$')
                 contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
                 # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
-                plot(x, z0 + x / (2.*sqrt((omega+m)/omega)) , 'k:')
-                plot(x, z0 + (x[-1]-x) / (2.*sqrt((omega+m)/omega)) , 'k:')
-                plot(x, z0 + (x[-1]-x) / (200.) , 'r:')
+                #plot(x, z0 + x / (2.*sqrt((omega+m)/omega)) , 'k:')
+                #plot(x, z0 + (x[-1]-x) / (2.*sqrt((omega+m)/omega)) , 'k:')
+                # plot(x, z0 + (x[-1]-x) / (200.) , 'r:')
                 # plot(x, z0 + (x[0]**1.5-x**1.5)*3./sqrt(2.*omega), 'k:')
                 # plot(x, z0 - (log(x)+log(x.min()))/double(1e3), 'k:')
                 # plot(x, z0 + (log(x)-2.*log(x.min()))/double(1e3), 'k:')
@@ -235,9 +260,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 xlabel(r'$\psi$')
                 ylabel(r'$z$')
                 ylim(z2.min(), z2.max())
+                fig.set_size_inches(5.,8.)
                 fig.tight_layout()
                 savefig(ddir+'/Yabs.png')
-
 
     # growth curves:
     clf()
@@ -247,11 +272,13 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     plot(zlist, ermax, formatsequence[2], label=r'$\max |E_r|$')
     xlabel(r'$z$')
     yscale('log')
-    xscale('log')
+    # xscale('log')
     legend()
     fig.set_size_inches(8.,4.)
+    fig.tight_layout()
     savefig(ddir+'/growthcurve.png')
-
+    close('all')
+    
     if ifBY:
         # ezhalf = (ez2[:,0]+ez2[:,1])/2.
         # erhalf = (er2[:,0]+er2[:,1])/2.
@@ -373,8 +400,8 @@ def comparseq(n1, n2, dir1, dir2):
     z1, x1, Q1, Er1, Ez1 = readnfiles(n1, 0, ddir = dir1, seq=True)
     z2, x2, Q2, Er2, Ez2 = readnfiles(n2, 0, ddir = dir2, seq=True)
 
-    ztitle1=dir1+r': $z1 = {:5.5f}$'.format(z1)
-    ztitle2=dir2+r': $z2 = {:5.5f}$'.format(z2)
+    ztitle1=r': $z1 = {:5.5f}$'.format(z1)
+    ztitle2=r': $z2 = {:5.5f}$'.format(z2)
 
     clf()
     fig, axs = plt.subplots(2)
@@ -475,6 +502,8 @@ def comparer(npar, npsi, nblocks=2):
     fig.tight_layout()
     savefig('comEzs.png')
 
+# for the harmonic solution:
+
 def qysol_plot(infile):
     
     lines = loadtxt(infile)
@@ -508,3 +537,24 @@ def qysol_plot(infile):
     xlabel(r'$r$')
     savefig(infile+'_Y.png')
     close()
+
+def onem_plot(m=1):
+    infile = 'ksoles_m'+str(m)+'.dat'
+    lines = loadtxt(infile)
+    omega = lines[:,0]
+    kre = lines[:,1]
+    kim = lines[:,2]
+    
+    clf()
+    fig = figure()
+    plot(omega, kre, 'k.')
+    plot(omega, kim, 'rs')
+    # plot(oar, kre_plus, 'ok', mfc='none')
+    # plot(oar, kim_plus, 'rs', mfc='none')
+    plot(omega, omega*0., 'g:')
+    plot(omega, m-kre, 'b:')
+    xlabel(r'$\omega/\Omega$')
+    ylabel(r'$k / \Omega$')
+    fig.tight_layout()
+    savefig('oreplot.png')
+

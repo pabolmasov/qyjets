@@ -32,8 +32,8 @@ drout = 1e-3
 rin = 0.0
 
 dr0 = 1e-2
-tol = 1e-5
-drmin = 1e-4
+tol = 1e-4
+drmin = 1e-3
 
 # omega = 1.0
 # m = 1
@@ -224,7 +224,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     rlist = asarray(rlist[1:])
     qlist = asarray(qlist[1:])
     ylist = asarray(ylist[1:])
-    # Qlast /= sqrt(median(qlist.real**2+qlist.imag**2))
+    Qlast /= sqrt(median(qlist.real**2+qlist.imag**2))
     
     # Ylast = (Y  - Yprev )/dr * rprev + Yprev
 
@@ -306,7 +306,7 @@ def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
             res_plus = root(onecurve, [res.x[0], -res.x[1]], args = (oar[i], m, R0), tol=1e-8)
             kre[i] = res.x[0]
             kim[i] = res.x[1]
-        # if res.success:
+        if 0:
             if res_plus.success:
                 print("omega = ", oar[i], ": k = ", res.x[0], "+",res.x[1], "i")
                 fout.write(str(oar[i])+" "+str(res.x[0])+" "+str(res.x[1])+" "+str(res_plus.x[0])+" "+str(res_plus.x[1])+"\n")

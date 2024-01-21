@@ -55,7 +55,7 @@ Rin = 0.1
 Rout = 1.0
 z0 = 10.
 npsi = 100
-zmax = 100.
+zmax = 1000.
 dzout = 1.e-3
 dz0 = 1e-4
 Cdiff = -0.5 # multiplier for diffusion-limited time step
@@ -761,4 +761,4 @@ def onerun(icfile, ifpcolor = False):
 
 if(size(sys.argv)>1):
     # if alpha is set, the simulation starts automatically
-    onerun('qysol_o0.4_m1_rin0.1.dat', ifpcolor = True)
+    onerun('qysol_o0.4_m1.dat', ifpcolor = True)

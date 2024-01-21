@@ -55,13 +55,13 @@ sigma = m-1.
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 100
-zmax = 100.
+npsi = 1000
+zmax = 1000.
 dzout = 1.e-3
 dz0 = 5e-5
 Cdiff = 0.5 # multiplier for diffusion-limited time step
 
-r2norm = True # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
+r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
 shitswitch = True # turns on explicit inner BCs
 Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative, and a second-derivative term is added to Ez
@@ -69,9 +69,9 @@ Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative,
 
 # smoothing Y-diffusion parameters
 ifAD = False
-ADr0 = 1./double(npsi)
+ADr0 = 2./double(npsi)
 ADn = 3.
-AD0 = 50.
+AD0 = 2.
 
 ifGauss = True
 
@@ -540,6 +540,15 @@ def onerun(icfile, ifpcolor = False):
         Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
         Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
         ctr = 0
+        
+        if alpha > 0.1:
+            # Er -= - sqrt(psi)/r/alpha * Ez  * (1.-exp(-psi*20.))**4
+            # Ez -= alpha * r/sqrt(psi) * Er * (1.-exp(-psi*20.))**6 # correction to match the outer BC
+            psicutoff= 0.9
+            w = psi > 0.5
+            Q[w] *= tanh((1.-psi[w])/(1.-psicutoff))
+            Er[w] *= tanh((1.-psi[w])/(1.-psicutoff))
+            Ez[w] *= tanh((1.-psi[w])/(1.-psicutoff))
     else:
         # restart mode
         ctr = restartn
@@ -587,9 +596,11 @@ def onerun(icfile, ifpcolor = False):
     if ifGauss:
         Gc = 0.5 ; Gd = 0.1
         Q = exp(-((psi-Gc)/Gd)**2/2.) + 0.j
-        Er = -2.j/m * psi**((2.-sigma)/2.) * Q * ((sigma+1.)/2. - (psi-Gc)/Gd**2)
+        Er = -2.j/m * psi**1.5/r * Q * ((sigma+1.)/2./psi - (psi-Gc)/Gd**2)
         Ez *= 0.
         Er1 = 0.
+        # Er -= Er[-1]
+        # Q -= exp(-((psi1-Gc)/Gd)**2/2.) + 0.j
 
     while(ctr < nz):
         if Cdiff < 0.:
@@ -631,6 +642,13 @@ def onerun(icfile, ifpcolor = False):
         z += dz
               
         if z >= zstore:
+        
+            if isnan(Q.sum()):
+                print("nan values found")
+                print("Q = ", Q)
+                print("Er = ", Er)
+                print("Ez = ", Ez)
+                exit(1)
             # Y and B:
             
             print("z = ", z)
