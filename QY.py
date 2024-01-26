@@ -13,6 +13,11 @@ import glob
 import re
 import os
 
+import scipy
+# from scipy import scipy.special
+from scipy.special import jv, jn_zeros
+
+
 from cmath import phase
 
 #Uncomment the following if you want to use LaTeX in figures 
@@ -33,7 +38,7 @@ rin = 0.0
 
 dr0 = 1e-2
 tol = 1e-4
-drmin = 1e-3
+drmin = 1e-4
 
 # omega = 1.0
 # m = 1
@@ -175,7 +180,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
             dr = minimum(maximum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
         else:
             if abs(Q) > 1e-8:
-                dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
+                if (abs(dQ)+abs(dY))< 1e-8:
+                    dr = dr0
+                else:
+                    dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
             else:
                 dr = minimum(abs(Y/dY)*tol,dr0)
         # dr = minimum(maximum(drmin, drmin/(r+drmin) * tol), drmin
@@ -306,6 +314,15 @@ def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
             res_plus = root(onecurve, [res.x[0], -res.x[1]], args = (oar[i], m, R0), tol=1e-8)
             kre[i] = res.x[0]
             kim[i] = res.x[1]
+            print("omega = ", oar[i], ": k = ", res.x[0], "+",res.x[1], "i")
+            fout.write(str(oar[i])+" "+str(res.x[0])+" "+str(res.x[1])+"\n")
+            fout.flush()
+            onecurve(res.x, oar[i], m, R0, ifplot=True)
+            filename = 'qysol_o'+str(oar[i])+'_m'+str(m)+'.dat'
+            os.system('cp qysol.dat '+filename)
+            # adding a perturbation on each step
+            randphase = rand()
+            k0 = res.x * (1. + 0.01 * exp(2.j*pi*randphase))
         if 0:
             if res_plus.success:
                 print("omega = ", oar[i], ": k = ", res.x[0], "+",res.x[1], "i")
@@ -454,6 +471,40 @@ def Rvar(omega, m, norecalc = False):
         onecurve([klist_real[0], klist_imag[0]], omega, m, rlist[0], ifplot=True)
         os.system('cp qysol.dat qysol{:3.2f}.dat'.format(rlist[0]))
         curvescompare('qysol{:3.2f}.dat'.format(rlist[0]), 'qysol{:3.2f}.dat'.format(R0))
+
+def QYmin_real(omega, m):
+
+    nkreal = 6
+    kreal_min = 0.2 ; kreal_max = 200.0
+    
+    kreal = (kreal_max/kreal_min) ** (arange(nkreal) / double(nkreal)) * kreal_min
+
+    kimag = 1.e-8
+    
+    imresid = zeros(nkreal)
+    reresid = zeros(nkreal)
+
+    # ASCII output
+    fout = open('qymap_real.dat', 'w+')
+    fout.write('# Re(k)  Im(k)  Re(\Delta Q) Im(\Delta Q)\n')
+    
+    for kr in arange(nkreal):
+        tmp = onecurve([kreal[kr], kimag], omega, m, R0=1.)
+        imresid[kr] = tmp[0]
+        reresid[kr] = tmp[1]
+        print("k = ", kreal[kr], "i:   ", reresid[kr], " ", imresid[kr])
+        fout.write(str(kreal[kr])+" "+str(kimag)+" "+str(reresid[kr])+" "+str(imresid[kr])+"\n")
+        fout.flush()
+
+    clf()
+    plot(kreal, reresid, 'k-')
+    plot(kreal, imresid, 'r:')
+    nb = 5 # Bessel roots
+    jzeros = scipy.special.jn_zeros(2,nb)
+    plot(jzeros**2/2./omega, jzeros*0., 'og')
+    xlabel(r'$k$')
+    ylabel(r'$\Delta Q(R)$')
+    savefig('QYmin_real.png')
 
 def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
 

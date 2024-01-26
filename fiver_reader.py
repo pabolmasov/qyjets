@@ -7,6 +7,10 @@ from numpy import *
 import numpy.ma as ma
 from pylab import *
 
+import scipy
+# from scipy import scipy.special
+from scipy.special import jv, jn_zeros
+
 # visualization routines
 
 # TODO: make them readable!
@@ -23,9 +27,14 @@ rc('text', usetex=True)
 # #add amsmath to the preamble
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"]
 
-
 formatsequence = ['k-', 'r:', 'g--', 'b-.', 'm--.']
 nformats = size(formatsequence)
+
+def largek_Bessel(r, k):
+
+    nu = sqrt(m**2-m+4.)
+
+    return r**m * jv(nu, sqrt(2.j*omega * k / (omega+m))*r)
 
 def rfun(z, psi, alpha, z0=10.):
     '''
@@ -212,6 +221,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             # cb.set_label(r'$|E_z|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
             # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
+            plot(x, z0 + x, 'w:')
+            plot(x[-1]-x, z0 + x, 'w:')
+            ylim(z0,z.max())
             xlabel(r'$\psi$')
             ylabel(r'$z$')
             fig.set_size_inches(5.,8.)
@@ -236,7 +248,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 pcolor(xf, zlist, (abs(b2))) # assuming x is the same
                 cb = colorbar()
                 cb.set_label(r'$|B|$')
-                contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
+                # contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
                 # contour(exp(psi2), z2, rfun(z2, psi2), colors='w')
                 xlabel(r'$\psi$')
                 ylabel(r'$z$')
@@ -509,21 +521,31 @@ def qysol_plot(infile):
     lines = loadtxt(infile)
     omega, m, rout, kre, kim = lines[0,:]
     
+    print("k = ", kre + 1.j*kim)
     # print(lines[0,:])
     
     r = lines[1:, 0]
     Q = lines[1:, 1] + lines[1:, 2] * 1.j
     Y = lines[1:, 3] + lines[1:, 4] * 1.j
     
+    B = (omega+m) / kre / r * scipy.special.jv(2,sqrt(2.*omega*kre)*r)
+    
+    B *= Q.imag.max() / B.max()
+    
     clf()
+    fig = figure()
     # plot(r, abs(Q), 'g--', label=r'$|Q|$')
     # plot(r, -abs(Q), 'g--', label=r'$-|Q|$')
     plot(r, Q.real, 'k-', label=r'$\Re Q$')
     plot(r, Q.imag, 'k:', label=r'$\Im Q$')
+    #bplot(r, B.real, 'r-', label=r'$\Re B$')
+    plot(r, B, 'r:', label=r'$\Im B$')
     xscale('log')
     legend()
     ylabel(r'$Q$')
     xlabel(r'$r$')
+    fig.set_size_inches(4.,4.)
+    # ylim(Q.imag.min(), Q.imag.max())
     savefig(infile+'_Q.png')
 
     clf()
@@ -538,23 +560,64 @@ def qysol_plot(infile):
     savefig(infile+'_Y.png')
     close()
 
-def onem_plot(m=1):
-    infile = 'ksoles_m'+str(m)+'.dat'
-    lines = loadtxt(infile)
-    omega = lines[:,0]
-    kre = lines[:,1]
-    kim = lines[:,2]
+def onem_plot(infilelist):
     
+    ns = size(infilelist)
+    
+    if ns < 1:
+        lines = loadtxt(infilelist)
+        omega = lines[:,0]
+        kre = lines[:,1]
+        kim = lines[:,2]
+    else:
+        lines = loadtxt(infilelist[0])
+        omega = lines[:,0]
+        kre = lines[:,1]
+        kim = lines[:,2]
+        if ns>1:
+            for k in arange(ns-1)+1:
+                lines = loadtxt(infilelist[k])
+                omega1 = lines[:,0]
+                kre1 = lines[:,1]
+                kim1 = lines[:,2]
+                omega = concatenate([omega, omega1])
+                kre = concatenate([kre, kre1])
+                kim = concatenate([kim, kim1])
+                
+    clf()
+    plot(omega, 1./kre, 'k.')
+    w = (kre > 0.)
+    lfit = polyfit(omega[w], 1./kre[w], 1)
+    plot(omega, lfit[0]*omega+lfit[1], 'r-')
+    savefig('oreplot_inverse.png')
     clf()
     fig = figure()
+    omega_tmp = (omega[kre>0.].max()-omega[kre>0.].min())* arange(1000)/double(1000)+omega[kre>0.].min()
+    print("1/k = ", lfit[0], " * omega + ", lfit[1])
+    print("sign change at omega = ", -lfit[1]/lfit[0])
+    
+    jzeros = scipy.special.jn_zeros(2,3)
+    # plot(omega_tmp, 1./(lfit[0]*omega_tmp+lfit[1]), 'r')
+    for kj in arange(size(jzeros)):
+        plot(omega_tmp, jzeros[kj]**2/2./omega_tmp, 'r:')
     plot(omega, kre, 'k.')
-    plot(omega, kim, 'rs')
+    # plot(omega, kim, 'rs')
     # plot(oar, kre_plus, 'ok', mfc='none')
     # plot(oar, kim_plus, 'rs', mfc='none')
-    plot(omega, omega*0., 'g:')
-    plot(omega, m-kre, 'b:')
+    # plot(omega, omega*0., 'g:')
+    plot([omega.min(), omega.max()], [-2.*(omega.min()+m), -2.*(omega.max()+m)], 'b:')
+    if (kre.max() > 0.) and (kre.min() < 0.):
+        plot([omega.min(), omega.max()], [0., 0.], 'g--')
     xlabel(r'$\omega/\Omega$')
     ylabel(r'$k / \Omega$')
+    if (kre.max() > 0.) and (kre.min() < 0.):
+        fig.set_size_inches(4.,6.)
+    else:
+        fig.set_size_inches(6.,6.)
+    ylim(maximum(kre.min(),-5.), minimum(kre.max(),100.))
     fig.tight_layout()
     savefig('oreplot.png')
+    close()
+    # print(abs(kim/kre))
+    print('max(|Im(k)|) = ', abs(kim/kre).max(), "for k = ", omega[abs(kim/kre).argmax()])
 

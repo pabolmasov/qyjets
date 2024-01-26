@@ -55,11 +55,11 @@ sigma = m-1.
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 1000
+npsi = 500
 zmax = 1000.
-dzout = 1.e-3
-dz0 = 5e-5
-Cdiff = 0.5 # multiplier for diffusion-limited time step
+dzout = 1e-4
+dz0 = 1e-4
+Cdiff = 0.3 # multiplier for diffusion-limited time step
 
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
@@ -73,19 +73,44 @@ ADr0 = 2./double(npsi)
 ADn = 3.
 AD0 = 2.
 
-ifGauss = True
+ifGauss = False
+ifSpline = True
 
 # restart block:
 ifrestart = False
-restartn = 879
-ddir = 'lfiver_alpha0.0_omega0.4'
+restartn = 100
+ddir = 'Glfiver_alpha0.5_first'
 
-if ifGauss:
-    outdir = 'Glfiver_alpha'+str(alpha)
-else:
-    outdir = 'lfiver_alpha'+str(alpha)
+dirpref = 'SplinetestDetailed' # directory prefix
+
+# if ifGauss:
+outdir = dirpref+'_alpha'+str(alpha)
+# else:
+#    outdir = 'lfiver_alpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
+
+def splinefun(x, x1, x2, x3, a):
+    
+    nx = size(x)
+    y = zeros(nx, dtype=complex128)
+    ydiv = zeros(nx, dtype=complex128)
+    
+    w1 = (x<x2) * (x>x1)
+    w2 = (x<x3) * (x>x2)
+    
+    xnorm1 = (x-x1)/(x2-x1)
+    xnorm2 = (x-x3)/(x2-x3)
+
+    y[w1] = (3.-2.*xnorm1[w1])*xnorm1[w1]**2
+    y[w2] = (3.-2.*xnorm2[w2])*xnorm2[w2]**2
+
+    ydiv[w1] = 6. * (1.-xnorm1[w1]) * xnorm1[w1] / (x2 - x1)
+    ydiv[w2] = 6. * (1.-xnorm2[w2]) * xnorm2[w2] / (x2 - x3)
+
+    return y * a, ydiv * a
+
+##############################################
 
 def testplot(x, ctr, qua, aqua, qname, q0=None, q1 = None, ztitle=''):
     clf()
@@ -399,7 +424,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
 
     # QQQQQQQQ
     dQ = 1j * (omega+m) * ee - 1.j * chi * omega * r**2/z**2 * Q
-
+    
     # Er
     
     dEr = alpha/z * Er + (2.+1j * alpha * omega * r**2 /z) * Ez * sqrt(psi)/r + \
@@ -540,7 +565,7 @@ def onerun(icfile, ifpcolor = False):
         Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
         Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
         ctr = 0
-        
+        '''
         if alpha > 0.1:
             # Er -= - sqrt(psi)/r/alpha * Ez  * (1.-exp(-psi*20.))**4
             # Ez -= alpha * r/sqrt(psi) * Er * (1.-exp(-psi*20.))**6 # correction to match the outer BC
@@ -549,11 +574,12 @@ def onerun(icfile, ifpcolor = False):
             Q[w] *= tanh((1.-psi[w])/(1.-psicutoff))
             Er[w] *= tanh((1.-psi[w])/(1.-psicutoff))
             Ez[w] *= tanh((1.-psi[w])/(1.-psicutoff))
+        '''
     else:
         # restart mode
         ctr = restartn
-        fname = ddir+'/lfiver{:05d}'.format(restartn)+'.dat'
-        fnameBY = ddir+'/lfiverBY{:05d}'.format(restartn)+'.dat'
+        fname = ddir+'/pfiver{:05d}'.format(restartn)+'.dat'
+        fnameBY = ddir+'/pfiverBY{:05d}'.format(restartn)+'.dat'
         z, psi, Q, Er, Ez = reader.asciiread(fname, ifBY = False)
         z, psif, B, Y = reader.asciiread(fnameBY, ifBY = True)
         dpsi = psi[1]-psi[0]
@@ -599,15 +625,24 @@ def onerun(icfile, ifpcolor = False):
         Er = -2.j/m * psi**1.5/r * Q * ((sigma+1.)/2./psi - (psi-Gc)/Gd**2)
         Ez *= 0.
         Er1 = 0.
+        # Er *= 0. # !!!temporary!!! the UnGauss test
         # Er -= Er[-1]
         # Q -= exp(-((psi1-Gc)/Gd)**2/2.) + 0.j
+        
+    if ifSpline:
+        x1 = 0.3 ; x2 = 0.5 ; x3 = 0.7
+        Q, Qdiv = splinefun(psi, x1, x2, x3, 1.)
+        # print(shape(Q), shape(Qdiv))
+        Er = -1.j/m * sqrt(psi)/r * (2./m * Qdiv * psi + Q)
+        Ez *= 0.
+        Er1 = 0.
 
     while(ctr < nz):
         if Cdiff < 0.:
             dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
-            dratQ = abs(dQ).max()/abs(Q)
-            dratEr = abs(dEr).max()/abs(Er)
-            dratEz = abs(dEz).max()/abs(Ez)
+            dratQ = abs(dQ).max()/(abs(Q)+abs(dQ))
+            dratEr = abs(dEr).max()/(abs(Er)+abs(dEr))
+            dratEz = abs(dEz).max()/(abs(Ez)+abs(dEz))
             dz = median(minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
             if abs(dEr_ghost) > 0.:
                 dzghost = abs(Er).max()/abs(dEr_ghost) * dz0
