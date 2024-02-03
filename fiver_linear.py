@@ -49,23 +49,27 @@ else:
 # quantities: Q, Er, Ez, Y, Bz
 # parameters: alpha, omega (real), m (whole), Rout = 2.0
 chi = alpha * (1.+2.*alpha)/6.
-omega = 0.4
+omega = 1.5
 m = 1 # not applicable for m=0: the scaling shd then be different
 sigma = m-1.
 Rin = 0.1
 Rout = 1.0
 z0 = 10.
-npsi = 500
+npsi = 100
 zmax = 1000.
-dzout = 1e-4
-dz0 = 1e-4
+dzout = 1e-3
+dz0 = 1e-5
 Cdiff = 0.3 # multiplier for diffusion-limited time step
 
+erlim = 1.01
+
+# numerical tricks and branches
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition;  Unstable, better avoid
 shitswitch = True # turns on explicit inner BCs
 Ydiffswitch = False # if Ydiff is on, Y is calculated without the EE derivative, and a second-derivative term is added to Ez
 # if it is off, we use flux limiter for Ez
+ifleap = False # changes the time step to a simpler scheme DOESN'T WORK, actually
 
 # smoothing Y-diffusion parameters
 ifAD = False
@@ -81,7 +85,9 @@ ifrestart = False
 restartn = 100
 ddir = 'Glfiver_alpha0.5_first'
 
-dirpref = 'SplinetestDetailed' # directory prefix
+dirpref = 'Splinetest' # directory prefix
+# L04 is harmonic test for omega=0.4
+# L15 for omega 1.5
 
 # if ifGauss:
 outdir = dirpref+'_alpha'+str(alpha)
@@ -137,7 +143,7 @@ def testplot(x, ctr, qua, aqua, qname, q0=None, q1 = None, ztitle=''):
     # xlim(0.3,0.5)
     fig.tight_layout()
     savefig(outdir+'/lfiver'+qname+'{:05d}.png'.format(ctr))
-    close()
+    # close()
 
 def asciiout(fname,s, x, qre, qim, erre, erim, ezre, ezim):
     
@@ -277,8 +283,10 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     if Er1 is None:
         Er1 = 2.*Er[-1]-Er[-2]
     Er1g = 2.*Er1-Er[-1]
+    # Er1g = Er1
 
-    Ez1 = -Ez[-1] - alpha/z * rf[-1]/sqrt(psif[-1]) * Er1 * 2.
+    # Ez1 = -Ez[-1] - alpha/z * rf[-1]/sqrt(psif[-1]) * Er1 * 2.
+    Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1)) #!!!BC fitting
 
     ee = Ez + alpha*r/z/sqrt(psi) * Er
     ee0 = Ez0 + alpha*r0/z/sqrt(psi0) * Er0
@@ -302,7 +310,6 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
         Bz_half[0] += (m/2./omega) * (Er[0]+Er0)/rf[0]/sqrt(psif[0])
         Bz_half[-1] += m * Er1/omega /rf[-1]/sqrt(psif[-1])
     
-
     if shitswitch:
         Bz_half[0] = 1.j /m * (1.-omega) * (ee0+ee[0]) - 0.5j * (Ez0+Ez[0])
 
@@ -399,6 +406,9 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     # Q1 = -Q[-1]
         
     Er1g = 2.*Er1-Er[-1]
+    if (abs(Er1g)> abs(Er1*(1.+erlim))):
+        Er1g /= (1.+erlim)
+    
     '''
     if Er1 is None:
         Er1 = -Er[-1] # 2.*Er[-1]-Er[-2] # no idea what is the correct BC
@@ -406,7 +416,8 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
         Er1 *= exp(1.j * BC_k * (z-z0))
     '''
     if Ez1 is None:
-        Ez1 = -Ez[-1] - alpha/z * rf[-1] /sqrt(psif[-1]) * 2. * Er1
+        # Ez1 = -Ez[-1] - alpha/z * rf[-1] /sqrt(psif[-1]) * 2. * Er1
+        Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1)) #!!!BC fitting
     else:
         Ez1 *= exp(1.j * BC_k * (z-z0))
     
@@ -415,6 +426,10 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     ee = Ez + alpha*r/z/sqrt(psi) * Er
     ee0 = Ez0 + alpha*r0/z/sqrt(psi0) * Er0
     ee1 = Ez1 + alpha *r1/ z /sqrt(psi1) * Er1g
+    
+    if abs((ee[-1]+ee1)/2.) > 1e-4:
+        print("Ee test = ", (ee[-1]+ee1)/2.)
+        # ii = input("E")
     
     # print(psi0)
     # ii = input('r0')
@@ -474,9 +489,15 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     aEz[-1] = 2. * chi / z**2 * psif[-1]**((2.-sigma)/2.) * (psi1**((sigma-1.)/2.)*Er1g-(psi**((sigma-1.)/2.)*Er)[-1]) / dpsi +\
         2. * alpha / z * psif[-1] ** ((-sigma+1.)/2.) * ((psi1**sigma1*Ez1)-(psi**sigma1*Ez)[-1]) / dpsi
 
+    
     #        2. * alpha / z * (Ez1-Ez[-1]) / dpsi # anything better?
     
-    dEz += 0.5 * (aEz[1:]+aEz[:-1])
+    dEz_diff = 0.5 * (aEz[1:]+aEz[:-1])
+
+    dEz_diff[-1] = 2. * chi / z**2 * psi[-1]**((2.-sigma)/2.) * (psi1**((sigma-1.)/2.)*Er1-(psi**((sigma-1.)/2.)*Er)[-1]/2. - (psi**((sigma-1.)/2.)*Er)[-2]/2.) / dpsi +\
+        2. * alpha / z * psi[-1] ** ((-sigma+1.)/2.) * ((psi1**sigma1*Ez1)-(psi**sigma1*Ez)[-2]) / dpsi # !!!trying to stabilize the outer boundary
+
+    dEz += dEz_diff
 
     return dQ, dEr, dEz, dEr_ghost
 
@@ -625,27 +646,26 @@ def onerun(icfile, ifpcolor = False):
         Er = -2.j/m * psi**1.5/r * Q * ((sigma+1.)/2./psi - (psi-Gc)/Gd**2)
         Ez *= 0.
         Er1 = 0.
-        # Er *= 0. # !!!temporary!!! the UnGauss test
-        # Er -= Er[-1]
-        # Q -= exp(-((psi1-Gc)/Gd)**2/2.) + 0.j
         
     if ifSpline:
         x1 = 0.3 ; x2 = 0.5 ; x3 = 0.7
         Q, Qdiv = splinefun(psi, x1, x2, x3, 1.)
         # print(shape(Q), shape(Qdiv))
-        Er = -1.j/m * sqrt(psi)/r * (2./m * Qdiv * psi + Q)
+        Er = -1.j * sqrt(psi)/r * (2./m * Qdiv * psi + Q)
         Ez *= 0.
         Er1 = 0.
 
     while(ctr < nz):
+        rf1 = rfun(z, psif[-1])
         if Cdiff < 0.:
-            dQ, dEr, dEz, dEr_ghost = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
-            dratQ = abs(dQ).max()/(abs(Q)+abs(dQ))
-            dratEr = abs(dEr).max()/(abs(Er)+abs(dEr))
-            dratEz = abs(dEz).max()/(abs(Ez)+abs(dEz))
-            dz = median(minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
-            if abs(dEr_ghost) > 0.:
-                dzghost = abs(Er).max()/abs(dEr_ghost) * dz0
+            dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z = z, Er1 = Er1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # test for the dz estimate
+            dratQ = abs(dQ1).max()/(abs(Q).max()+abs(dQ1).max())
+            dratEr = abs(dEr1).max()/(abs(Er).max()+abs(dEr1).max())
+            dratEz = abs(dEz1).max()/(abs(Ez).max()+abs(dEz1).max())
+            dz = dz0/(dratQ+dratEr+dratEz).min()
+            # median(minimum(1./dratQ, minimum(1./dratEr, 1./dratEz))) * dz0
+            if abs(dEr_ghost1) > 0.:
+                dzghost = abs(Er).max()/abs(dEr_ghost1) * dz0
                 dz = minimum(dz, dzghost)
         else:
             if (alpha>0.):
@@ -663,16 +683,23 @@ def onerun(icfile, ifpcolor = False):
         # inner edge BCs
         # fixing Er or Ez with 87-89
 
-        dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost1*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
-        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = Er1+dEr_ghost2*dz/2., r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
-        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = Er1+dEr_ghost3*dz, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
+        if Cdiff > 0.:
+            dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost1*dz/2.), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
+        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost2*dz/2.), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
+        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = (Er1+dEr_ghost3*dz), r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
 
-        Q  += (dQ1 + 2. * dQ2 + 2. * dQ3 + dQ4) * dz/6.
-        Er += (dEr1 + 2. * dEr2 + 2. * dEr3 + dEr4) * dz/6.
-        Ez += (dEz1 + 2. * dEz2 + 2. * dEz3 + dEz4) * dz/6.
-        
-        Er1 += (dEr_ghost1 + 2. * dEr_ghost2 + 2. * dEr_ghost3 + dEr_ghost4) * dz / 6.
+        if ifleap:
+            Q += (dQ1+dQ4) * dz /2.
+            Er += (dEr1 + dEr4) * dz / 2.
+            Ez += (dEz1 + dEz4) * dz / 2.
+            Er1 += (dEr_ghost1+dEr_ghost4) * dz / 2.
+        else:
+            Q  += (dQ1 + 2. * dQ2 + 2. * dQ3 + dQ4) * dz/6.
+            Er += (dEr1 + 2. * dEr2 + 2. * dEr3 + dEr4) * dz/6.
+            Ez += (dEz1 + 2. * dEz2 + 2. * dEz3 + dEz4) * dz/6.
+            Er1 += (dEr_ghost1 + 2. * dEr_ghost2 + 2. * dEr_ghost3 + dEr_ghost4) * dz / 6.
+            # Er1 *= exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
         
         z += dz
               
@@ -755,4 +782,4 @@ def onerun(icfile, ifpcolor = False):
 
 if(size(sys.argv)>1):
     # if alpha is set, the simulation starts automatically
-    onerun('qysol_o0.4_m1.dat', ifpcolor = True)
+    onerun('qysol_o1.5_m1.dat', ifpcolor = True)

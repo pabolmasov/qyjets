@@ -14,7 +14,7 @@ from scipy.special import jv, jn_zeros
 # visualization routines
 
 # TODO: make them readable!
-omega = 0.4
+omega = 1.5
 m = 1
 R0 = 1.0
 z0 = 10.
@@ -327,7 +327,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
 
     if psislice is not None:
         z = asarray(zlist)
-        k = -2.6139953464141414 # kostylj
+        k = 12.386872087571811 # -2.6139953464141414 # kostylj
         wpsi = abs(x-psislice).argmin()
         clf()
         fig = figure()

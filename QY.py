@@ -472,12 +472,13 @@ def Rvar(omega, m, norecalc = False):
         os.system('cp qysol.dat qysol{:3.2f}.dat'.format(rlist[0]))
         curvescompare('qysol{:3.2f}.dat'.format(rlist[0]), 'qysol{:3.2f}.dat'.format(R0))
 
-def QYmin_real(omega, m):
 
-    nkreal = 6
-    kreal_min = 0.2 ; kreal_max = 200.0
+def QYmin_real(omega, m, recalc = True):
+
+    nkreal = 150
+    kreal_min = 10. ; kreal_max = 1000.0
     
-    kreal = (kreal_max/kreal_min) ** (arange(nkreal) / double(nkreal)) * kreal_min
+    kreal = (kreal_max/kreal_min) ** (arange(nkreal) / double(nkreal-1)) * kreal_min
 
     kimag = 1.e-8
     
@@ -485,26 +486,69 @@ def QYmin_real(omega, m):
     reresid = zeros(nkreal)
 
     # ASCII output
-    fout = open('qymap_real.dat', 'w+')
-    fout.write('# Re(k)  Im(k)  Re(\Delta Q) Im(\Delta Q)\n')
+    if recalc:
+        fout = open('qymap_real.dat', 'w+')
+        fout.write('# Re(k)  Im(k)  Re(\Delta Q) Im(\Delta Q)\n')
     
     for kr in arange(nkreal):
-        tmp = onecurve([kreal[kr], kimag], omega, m, R0=1.)
-        imresid[kr] = tmp[0]
-        reresid[kr] = tmp[1]
-        print("k = ", kreal[kr], "i:   ", reresid[kr], " ", imresid[kr])
-        fout.write(str(kreal[kr])+" "+str(kimag)+" "+str(reresid[kr])+" "+str(imresid[kr])+"\n")
-        fout.flush()
+        if recalc:
+            tmp = onecurve([kreal[kr], kimag], omega, m, R0=1., ifplot=True)
+            imresid[kr] = tmp[0]
+            reresid[kr] = tmp[1]
+            print("k = ", kreal[kr], "i:   ", reresid[kr], " ", imresid[kr])
+            fout.write(str(kreal[kr])+" "+str(kimag)+" "+str(reresid[kr])+" "+str(imresid[kr])+"\n")
+            fout.flush()
+            os.system('cp qysol.dat qysol{:3.2f}.dat'.format(kreal[kr]))
+        lines = loadtxt('qysol{:3.2f}.dat'.format(kreal[kr]))
+        omega1, m1, R01, kre1, kim1 = lines[0,:]
+        # if not(recalc):
+        print(kreal[kr], ' = ', kre1)
+        print(omega, ' = ', omega1)
+        r1 = lines[1:,0]
+        qre = lines[1:,1]  ;   qim = lines[1:,2]
+        yre = lines[1:,3]  ;   yim = lines[1:,4]
+
+        if kr==0:
+            r = r1
+            nr = size(r)
+            q2 = zeros([nr,nkreal])
+            q2[:,0] = qim
+        else:
+            qfun = interp1d(r1, qim, bounds_error=False)
+            q2[:,kr] = qfun(r)
+            reresid[kr] = 0.
+            imresid[kr] = qfun(1.)
+
+    if recalc:
+        fout.close()
 
     clf()
-    plot(kreal, reresid, 'k-')
-    plot(kreal, imresid, 'r:')
-    nb = 5 # Bessel roots
+    fig = figure()
+    plot(kreal, kreal * reresid, 'k-')
+    plot(kreal, kreal * imresid, 'r:')
+    nb = 10 # Bessel roots
     jzeros = scipy.special.jn_zeros(2,nb)
     plot(jzeros**2/2./omega, jzeros*0., 'og')
     xlabel(r'$k$')
-    ylabel(r'$\Delta Q(R)$')
+    ylabel(r'$Q(r=1)$')
+    xscale('log')
+    # ylim(-0.01,0.01)
+    fig.set_size_inches(8.,4.)
     savefig('QYmin_real.png')
+    
+    k2, r2 = meshgrid(kreal, r)
+    
+    clf()
+    pcolor(k2, r2, q2, cmap='afmhot', vmin=-0.01, vmax=0.01)
+    colorbar()
+    contour(k2, r2, q2, levels=[0.], colors= 'w')
+    plot(jzeros**2/2./omega, jzeros*0.+1., 'v', color=(0.5,1.0,0.5))
+    xlabel(r'$k$')
+    ylabel(r'$r$')
+    xscale('log')
+    xlim(k2.min(), k2.max())
+    fig.set_size_inches(8.,4.)
+    savefig('QYmin_real_2d.png')
 
 def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
 
