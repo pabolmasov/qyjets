@@ -17,7 +17,7 @@ from scipy.special import jv, jn_zeros
 omega = 1.5
 m = 1
 R0 = 1.0
-z0 = 10.
+z0 = 1.
 
 #Uncomment the following if you want to use LaTeX in figures
 rc('font',**{'family':'serif'})
@@ -127,9 +127,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 if ifBY:
                     b2 = zeros([nz, nx+1], dtype=complex)
                     y2 = zeros([nz, nx+1], dtype=complex)
-                qmax = zeros(nz, dtype = complex)
-                ermax = zeros(nz, dtype = complex)
-                ezmax = zeros(nz, dtype = complex)
+                qmax = zeros(nz)
+                ermax = zeros(nz)
+                ezmax = zeros(nz)
                 
             ztitle=r'$z = {:5.5f}$'.format(z)
             axs[0].plot(x, Q.real, formatsequence[ctr%nformats], label=ztitle)
@@ -277,6 +277,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 savefig(ddir+'/Yabs.png')
 
     # growth curves:
+    zlist = asarray(zlist)
+    ffit_q, ffit_q_cov = polyfit(log(zlist), log(qmax), 1, cov=True)
+    
     clf()
     fig = figure()
     plot(zlist, qmax, formatsequence[0], label=r'$\max |Q|$')
@@ -284,12 +287,18 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     plot(zlist, ermax, formatsequence[2], label=r'$\max |E_r|$')
     xlabel(r'$z$')
     yscale('log')
-    # xscale('log')
-    legend()
+    if (zlist.max()/zlist.min()>3.):
+        xscale('log')
+        print("Q \simeq z^(", ffit_q[0], "+/-", sqrt(ffit_q_cov[0,0]),") * (", exp(ffit_q[1]), "+/-", exp(ffit_q[1])*sqrt(ffit_q_cov[1,1]),")")
+        plot(zlist, exp(log(zlist)*ffit_q[0]+ffit_q[1]), 'm-.', r'linear fit to $\max |Q|$')
+
+    # legend()
+    ylim(qmax.min(), qmax.max())
     fig.set_size_inches(8.,4.)
     fig.tight_layout()
     savefig(ddir+'/growthcurve.png')
     close('all')
+    # TODO: slope estimate
     
     if ifBY:
         # ezhalf = (ez2[:,0]+ez2[:,1])/2.

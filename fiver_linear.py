@@ -54,14 +54,14 @@ m = 1 # not applicable for m=0: the scaling shd then be different
 sigma = m-1.
 Rin = 0.1
 Rout = 1.0
-z0 = 10.
-npsi = 100
+z0 = 1. # all the others use z=10
+npsi = 200
 zmax = 1000.
 dzout = 1e-3
-dz0 = 1e-5
+dz0 = 1e-2
 Cdiff = 0.3 # multiplier for diffusion-limited time step
 
-erlim = 1.01
+# erlim = 1.1
 
 # numerical tricks and branches
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
@@ -77,15 +77,17 @@ ADr0 = 2./double(npsi)
 ADn = 3.
 AD0 = 2.
 
+erexp = True
+
 ifGauss = False
-ifSpline = True
+ifSpline = False
 
 # restart block:
 ifrestart = False
-restartn = 100
-ddir = 'Glfiver_alpha0.5_first'
+restartn = 1440
+ddir = 'L15_alpha0.5'
 
-dirpref = 'Splinetest' # directory prefix
+dirpref = 'L15' # directory prefix
 # L04 is harmonic test for omega=0.4
 # L15 for omega 1.5
 
@@ -286,13 +288,14 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     # Er1g = Er1
 
     # Ez1 = -Ez[-1] - alpha/z * rf[-1]/sqrt(psif[-1]) * Er1 * 2.
-    Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1)) #!!!BC fitting
 
     ee = Ez + alpha*r/z/sqrt(psi) * Er
     ee0 = Ez0 + alpha*r0/z/sqrt(psi0) * Er0
-    ee1 = Ez1 + alpha *r1/ z / sqrt(psi1) * Er1g
-    # ee1 = -ee[-1]
-    
+    # ee1 = Ez1 + alpha *r1/ z / sqrt(psi1) * Er1g
+    ee1 = -ee[-1]
+
+    Ez1 = ee1 - alpha/z * r1/sqrt(psi1) * Er1g
+
     sigma1 = (sigma+1.)/2.
 
     Bz_half = zeros(npsi+1, dtype=complex128) # B
@@ -406,8 +409,8 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     # Q1 = -Q[-1]
         
     Er1g = 2.*Er1-Er[-1]
-    if (abs(Er1g)> abs(Er1*(1.+erlim))):
-        Er1g /= (1.+erlim)
+    # if (abs(Er1g)> abs(Er1*(1.+erlim))):
+    #     Er1g /= (1.+erlim)
     
     '''
     if Er1 is None:
@@ -417,7 +420,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     '''
     if Ez1 is None:
         # Ez1 = -Ez[-1] - alpha/z * rf[-1] /sqrt(psif[-1]) * 2. * Er1
-        Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1)) #!!!BC fitting
+        Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1))
     else:
         Ez1 *= exp(1.j * BC_k * (z-z0))
     
@@ -446,7 +449,10 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     0.5j * ( m * (Bz_half*sqrt(psif)/rf)[1:] + m * (Bz_half*sqrt(psif)/rf)[:-1] - omega * Y_half[1:] - omega * Y_half[:-1]) - 1.j * alpha * m * sqrt(psi) / r / z * Q
     
     # trying to evolve the ghost zone:
-    dEr_ghost = 1.j * (m * sqrt(psif)/rf * Bz_half - omega * Y_half)[-1] - alpha / z * (1.+1.j * alpha * omega * rf1**2/z) * Er1
+    if erexp:
+        dEr_ghost = 1.j * (m * sqrt(psif)/rf * Bz_half - omega * Y_half)[-1] # - alpha / z * (1.+1.j * alpha * omega * rf1**2/z) * Er1
+    else:
+        dEr_ghost = 1.j * (m * sqrt(psif)/rf * Bz_half - omega * Y_half)[-1] - alpha / z * (1.+1.j * alpha * omega * rf1**2/z) * Er1
     # Y part:
 
     # an attempt to rewrite it as a diffusion term without Y
@@ -586,16 +592,6 @@ def onerun(icfile, ifpcolor = False):
         Bz1 = (2.j * k /(omega+m) * Q1 + (2.*omega+m) * Y1) / (m + k*r1f**2)
         Er1 = m / k * Bz1 - omega/k * Y1 - 2.j / (omega+m) * Q1 # Er/r^sigma
         ctr = 0
-        '''
-        if alpha > 0.1:
-            # Er -= - sqrt(psi)/r/alpha * Ez  * (1.-exp(-psi*20.))**4
-            # Ez -= alpha * r/sqrt(psi) * Er * (1.-exp(-psi*20.))**6 # correction to match the outer BC
-            psicutoff= 0.9
-            w = psi > 0.5
-            Q[w] *= tanh((1.-psi[w])/(1.-psicutoff))
-            Er[w] *= tanh((1.-psi[w])/(1.-psicutoff))
-            Ez[w] *= tanh((1.-psi[w])/(1.-psicutoff))
-        '''
     else:
         # restart mode
         ctr = restartn
@@ -655,6 +651,8 @@ def onerun(icfile, ifpcolor = False):
         Ez *= 0.
         Er1 = 0.
 
+    cer1 = 1.
+
     while(ctr < nz):
         rf1 = rfun(z, psif[-1])
         if Cdiff < 0.:
@@ -668,26 +666,17 @@ def onerun(icfile, ifpcolor = False):
                 dzghost = abs(Er).max()/abs(dEr_ghost1) * dz0
                 dz = minimum(dz, dzghost)
         else:
-            if (alpha>0.):
-                ddiff = (dpsi * exp(psi[0]))**2/8. * (z/z0)**(2.*alpha)
+            #if (alpha>0.):
+            #    ddiff = (dpsi * exp(psi[0]))**2/8. * (z/z0)**(2.*alpha)
             dz = ddiff
-
-        # print(dEz)
-        # print(dratQ.min(), dratEr.min(), dratEz.min())
-        # ii = input(dz)
-        # dz_CFL = 0.25*dr /vez.max()
-        # dz = dz0
-        # ii = input(dz)
-        # print("z = ", z)
-        # Y plots
-        # inner edge BCs
-        # fixing Er or Ez with 87-89
 
         if Cdiff > 0.:
             dQ1, dEr1, dEz1, dEr_ghost1 = step(psi, psif, Q, Er, Ez, z=z, Er1 = Er1, BC_k = k, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k1 Runge-Kutta
-        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost1*dz/2.), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
-        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost2*dz/2.), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
-        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = (Er1+dEr_ghost3*dz), r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
+        if erexp:
+            cer1 = exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
+        dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+dEz1*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost1*dz/2.) * sqrt(cer1), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k2 Runge-Kutta
+        dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Er1 = (Er1+dEr_ghost2*dz/2.) * sqrt(cer1), r=r, rf=rf) #, Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k3 Runge-Kutta
+        dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Er1 = (Er1+dEr_ghost3*dz) * cer1, r=r, rf=rf) # , Qout = Q0, Erout = Er0, Ezout = Ez0, BC_k=k, Q1 = Q1, Er1 = Er1, Ez1 = Ez1) # k4 Runge-Kutta
 
         if ifleap:
             Q += (dQ1+dQ4) * dz /2.
@@ -699,7 +688,8 @@ def onerun(icfile, ifpcolor = False):
             Er += (dEr1 + 2. * dEr2 + 2. * dEr3 + dEr4) * dz/6.
             Ez += (dEz1 + 2. * dEz2 + 2. * dEz3 + dEz4) * dz/6.
             Er1 += (dEr_ghost1 + 2. * dEr_ghost2 + 2. * dEr_ghost3 + dEr_ghost4) * dz / 6.
-            # Er1 *= exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
+            if erexp:
+                Er1 *= exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
         
         z += dz
               
@@ -734,6 +724,8 @@ def onerun(icfile, ifpcolor = False):
             # BY output:
             fnameBY = outdir+'/pfiverBY{:05d}'.format(ctr)+'.dat'
             asciiout_f(fnameBY, headerstring, psif, B.real, B.imag, Y.real, Y.imag)
+
+            # TODO: Er1 output
 
             if ifpcolor:
                 zlist.append(z)
