@@ -279,7 +279,9 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     # growth curves:
     zlist = asarray(zlist)
     ffit_q, ffit_q_cov = polyfit(log(zlist), log(qmax), 1, cov=True)
-    
+    ffit_er, ffit_er_cov = polyfit(log(zlist), log(ermax), 1, cov=True)
+    ffit_ez, ffit_ez_cov = polyfit(log(zlist), log(ezmax), 1, cov=True)
+
     clf()
     fig = figure()
     plot(zlist, qmax, formatsequence[0], label=r'$\max |Q|$')
@@ -290,6 +292,8 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     if (zlist.max()/zlist.min()>3.):
         xscale('log')
         print("Q \simeq z^(", ffit_q[0], "+/-", sqrt(ffit_q_cov[0,0]),") * (", exp(ffit_q[1]), "+/-", exp(ffit_q[1])*sqrt(ffit_q_cov[1,1]),")")
+        print("Er \simeq z^(", ffit_er[0], "+/-", sqrt(ffit_er_cov[0,0]),") * (", exp(ffit_er[1]), "+/-", exp(ffit_er[1])*sqrt(ffit_er_cov[1,1]),")")
+        print("Ez \simeq z^(", ffit_ez[0], "+/-", sqrt(ffit_ez_cov[0,0]),") * (", exp(ffit_ez[1]), "+/-", exp(ffit_ez[1])*sqrt(ffit_ez_cov[1,1]),")")
         plot(zlist, exp(log(zlist)*ffit_q[0]+ffit_q[1]), 'm-.', r'linear fit to $\max |Q|$')
 
     # legend()
