@@ -60,8 +60,8 @@ left = crank - 1
 right = crank + 1
 oneblock = int(npsi / nblocks) # number of cells in a block
 
-zmax = 50.
-dzout = 1e-4
+zmax = 1000.
+dzout = 1e-3
 
 r2norm = False # if True, Er/r^2 is averaged in the expr. for B, otherwise Er is averaged and divided by rf^2
 abmatch = False # treatment of the inner boundary: if we are using the d/dr(0) = 0 condition
@@ -155,8 +155,6 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
 
     Ez1 = ee1 - alpha/z * r1/sqrt(psi1) * Er1g
 
-    sigma1 = (sigma+1.)/2.
-
     Bz_half = zeros(oneblock+1, dtype=complex128) # B
         
     Bz_half[1:-1] = 2.j * psif[1:-1]**((1.-sigma)/2.) * ((psi**sigma1*Q)[1:]-(psi**sigma1*Q)[:-1])/dpsi / rf[1:-1]**2/omega
@@ -196,11 +194,11 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     if r2norm:
         Y_half[1:-1] += 0.25 * alpha / omega / z * ((r*Ez*sqrt(psi))[1:]+(r*Ez*sqrt(psi))[:-1]) - 0.25 * alpha * m / omega / z * ((Q*sqrt(psi)/r)[1:]+(Q*sqrt(psi)/r)[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * ((r*Ez*sqrt(psi))[0]+(r0*Ez0*sqrt(psi0))) - 0.25 * alpha * m / omega / z * ((Q*sqrt(psi)/r)[0]+(Q0*sqrt(psi1)/r0))
-        Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*sqrt(psi))[-1]+(r1*Ez1*sqrt(psi1))) # - 0.25 * alpha * m / omega / z * ((Q*exp(psi/2.)/r)[-1]+(Q1*exp(psi1/2.)/r1))
+        Y_half[-1] += 0.25 * alpha / omega / z * ((r*Ez*sqrt(psi))[-1]+(r1*Ez1*sqrt(psi1))) - 0.25 * alpha * m / omega / z * ((Q*sqrt(psi)/r)[-1]+(Q1*sqrt(psi1)/r1))
     else:
         Y_half[1:-1] += 0.25 * alpha / omega / z * (Ez[1:]+Ez[:-1]) * rf[1:-1]*sqrt(psif[1:-1])  - 0.25 * alpha * m / omega * (sqrt(psif)/ rf)[1:-1] / z * (Q[1:]+Q[:-1])
         Y_half[0] += 0.25 * alpha / omega / z * (Ez[0]+Ez0) * rf[0]*sqrt(psif[0]) - 0.25 * alpha * m / omega  * (sqrt(psif)/ rf)[0] / z * (Q[0]+Q0)
-        Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*sqrt(psif[-1]) - 0.25 * alpha * m / omega  * (exp(psif/2.)/ rf)[-1] / z * (Q[-1]+Q1)
+        Y_half[-1] += 0.25 * alpha / omega / z * (Ez[-1]+Ez1) * rf[-1]*sqrt(psif[-1]) - 0.25 * alpha * m / omega  * (sqrt(psif)/ rf)[-1] / z * (Q[-1]+Q1)
 
     if crank == first:
         Y_half[0] = -1.j * sqrt(psif[0])/rf[0] * (ee0+ee[0])/2.
@@ -412,7 +410,7 @@ def runBlock(icfile):
         # tt = input("t")
 
     csound = 2. * sqrt((omega+m)/omega)
-    dz_CFL = dpsi  / csound
+    dz_CFL = dpsi / csound
     ddiff = dpsi**2/8. * Cdiff
     print("ddiff = ", ddiff)
     dz = ddiff
@@ -434,6 +432,8 @@ def runBlock(icfile):
         Er1 = 0.
 
     while(ctr < nz):
+        rf1 = rfun(z, psif[-1])
+
         # Q_left = None ; Er_left = None ; Ez_left = None
         # Q_right = None ; Er_right = Er1 ; Ez_right = None
 
@@ -478,13 +478,19 @@ def runBlock(icfile):
             Q_left = leftpack['Q0'] ; Er_left = leftpack['Er0']  ;  Ez_left = leftpack['Ez0']
         if crank < last:
             Q_right = rightpack['Q1'] ; Er_right = rightpack['Er1']  ;  Ez_right = rightpack['Ez1']
-        else:
-            Er_right = Er1 + dEr_ghost1 * dz/2.
+        # else:
+        #     Er_right = Er1 + dEr_ghost1 * dz/2.
 
         if crank == first:
             thetimer.stop_comp("BC")
             thetimer.start_comp("step")
 
+        if crank == last:
+            cer1 = exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
+            Er_right = (Er1+dEr_ghost1*dz/2.) * sqrt(cer1)
+        else:
+            Er_right = Er1
+            
         dQ2, dEr2, dEz2, dEr_ghost2 = step(psi, psif, Q+dQ1*dz/2., Er+dEr1*dz/2., Ez+Ez1*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
         
         if crank == first:
@@ -498,13 +504,17 @@ def runBlock(icfile):
             Q_left = leftpack['Q0'] ; Er_left = leftpack['Er0']  ;  Ez_left = leftpack['Ez0']
         if crank < last:
             Q_right = rightpack['Q1'] ; Er_right = rightpack['Er1']  ;  Ez_right = rightpack['Ez1']
-        else:
-            Er_right = Er1 + dEr_ghost2 * dz/2.
+        # else:
+        #    Er_right = Er1 + dEr_ghost2 * dz/2.
  
         if crank == first:
             thetimer.stop_comp("BC")
             thetimer.start_comp("step")
             
+        if crank == last:
+            # cer1 = exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
+            Er_right = (Er1+dEr_ghost2*dz/2.) * sqrt(cer1)
+
         dQ3, dEr3, dEz3, dEr_ghost3 = step(psi, psif, Q+dQ2*dz/2., Er+dEr2*dz/2., Ez+dEz2*dz/2., z=z+dz/2., Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
 
         if crank == first:
@@ -518,13 +528,17 @@ def runBlock(icfile):
             Q_left = leftpack['Q0'] ; Er_left = leftpack['Er0']  ;  Ez_left = leftpack['Ez0']
         if crank < last:
             Q_right = rightpack['Q1'] ; Er_right = rightpack['Er1']  ;  Ez_right = rightpack['Ez1']
-        else:
-            Er_right = Er1 + dEr_ghost3 * dz
+        # else:
+        #     Er_right = Er1 + dEr_ghost3 * dz
 
         if crank == first:
             thetimer.stop_comp("BC")
             thetimer.start_comp("step")
 
+        if crank == last:
+            cer1 = exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
+            Er_right = (Er1+dEr_ghost3*dz) * cer1
+            
         dQ4, dEr4, dEz4, dEr_ghost4 = step(psi, psif, Q+dQ3*dz, Er+dEr3*dz, Ez+dEz3*dz, z=z+dz, Q0 = Q_left, Er0 = Er_left, Ez0 = Ez_left, Q1 = Q_right, Er1 = Er_right, Ez1 = Ez_right, r=r, rf=rf)
 
         Q  += (dQ1 + 2. * dQ2 + 2. * dQ3 + dQ4) * dz/6.
@@ -534,6 +548,7 @@ def runBlock(icfile):
         if crank == last:
             # updating the right ghost cell for Er
             Er1 += (dEr_ghost1 + 2. * dEr_ghost2 + 2. * dEr_ghost3 + dEr_ghost4) * dz / 6.
+            Er1 *= exp(-alpha * (1.+1.j*alpha*omega*rf1**2/z) * (dz/z))
 
         z += dz
 

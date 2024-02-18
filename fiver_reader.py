@@ -70,14 +70,14 @@ def asciiread(fname, ifBY = False):
         ezre = lines[:,5] ; ezim = lines[:,6]
         return z, x, qre+1.j*qim, erre+1.j*erim, ezre+1.j*ezim
 
-def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False, ifBY = False):
+def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False, ifBY = False, show = False):
     '''
     reads a single snapshot stored as multiple dat files
     nblocks controls the number of mesh blocks we need to combine
     'seq' allows to read sequential data (no effect if nblocks >1)
     '''
     # TODO: par support for BY
-    if nblocks <=1:
+    if nblocks <1:
         if seq:
             if ifBY:
                 return asciiread(ddir+'/pfiverBY{:05d}'.format(k)+'.dat', ifBY=ifBY)
@@ -90,22 +90,32 @@ def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False, ifBY = False):
             z, x, B, Y = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = True)
         else:
             z, x, Q, Er, Ez = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = False)
-        for j in arange(nblocks-1)+1:
-            if ifBY:
-                z1, x1, B1, Y1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = True)
-            else:
-                z1, x1, Q1, Er1, Ez1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(0)+'.dat', ifBY = False)
-            x = concatenate([x,x1])
-            if ifBY:
-                B = concatenate([B, B1])
-                Y = concatenate([Y, Y1])
-            else:
-                Q = concatenate([Q,Q1])
-                Er = concatenate([Er,Er1])
-                Ez = concatenate([Ez,Ez1])
-        if BY:
+        if nblocks > 1:
+            for j in arange(nblocks-1)+1:
+                if ifBY:
+                    z1, x1, B1, Y1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(j)+'.dat', ifBY = True)
+                else:
+                    z1, x1, Q1, Er1, Ez1 = asciiread(ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(j)+'.dat', ifBY = False)
+                    # print('reading', ddir+'/par{:05d}'.format(k)+'.{:03d}'.format(j)+'.dat')
+                x = concatenate([x,x1])
+                if ifBY:
+                    B = concatenate([B, B1])
+                    Y = concatenate([Y, Y1])
+                else:
+                    Q = concatenate([Q,Q1])
+                    Er = concatenate([Er,Er1])
+                    Ez = concatenate([Ez,Ez1])
+        if ifBY:
             return z, x, B, Y
         else:
+            if show:
+                clf()
+                plot(x, Q.real, 'k-')
+                plot(x, Q.imag, 'k:')
+                xlabel(r'$\psi$')
+                ylabel(r'$Q$')
+                savefig('fileshow.png')
+        
             return z, x, Q, Er, Ez
         
 def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha = 0.0, psislice = None, ifBY = False, ifmovie = False):
@@ -280,7 +290,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             x2, z2 = meshgrid(x, zlist)
             clf()
             fig = figure()
-            pcolor(x, zlist, log10(abs(q2))) # assuming x is the same
+            pcolor(x, zlist, (abs(q2))) # assuming x is the same
             cb = colorbar()
             # cb.set_label(r'$|Q|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
