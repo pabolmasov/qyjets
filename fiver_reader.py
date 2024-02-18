@@ -18,6 +18,7 @@ omega = 1.5
 m = 1
 R0 = 1.0
 z0 = 1.
+kre = 12.386872087571811
 
 #Uncomment the following if you want to use LaTeX in figures
 rc('font',**{'family':'serif'})
@@ -40,12 +41,15 @@ def rfun(z, psi, alpha, z0=10.):
     '''
     universal function to compute r(r, psi)
     '''
-    chi = alpha * (1.+2.*alpha)/6.
+    # chi = alpha * (1.+2.*alpha)/6.
+    return sqrt(psi) * (z/z0)**alpha *R0
+    '''
     if alpha <= 0.:
         return sqrt(psi) * (z/z0)**alpha
     else:
         return z/z0 * sqrt((1.-sqrt(1.-4.*chi*psi*(z/z0)**(2.*(alpha-1.))))/2./chi)
-
+    '''
+    
 def asciiread(fname, ifBY = False):
 
     f = open(fname, "r")
@@ -104,13 +108,13 @@ def readnfiles(k, nblocks, ddir = 'paralpha0.0/', seq = False, ifBY = False):
         else:
             return z, x, Q, Er, Ez
         
-def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha = 0.0, psislice = None, ifBY = False):
+def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha = 0.0, psislice = None, ifBY = False, ifmovie = False):
     nk = size(karray)
     if nk <= 1:
         fiver_plot(karray[0], nblocks=nblocks)
     else:
-        clf()
-        fig, axs = plt.subplots(2)
+        # clf()
+        # fig, axs = plt.subplots(2)
         ctr  = 0
         for k in karray:
             z, x, Q, Er, Ez = readnfiles(k, nblocks, ddir=ddir, seq = (nblocks<=1))
@@ -127,13 +131,20 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 if ifBY:
                     b2 = zeros([nz, nx+1], dtype=complex)
                     y2 = zeros([nz, nx+1], dtype=complex)
+                    bmax = zeros(nz)
+                    ymax = zeros(nz)
                 qmax = zeros(nz)
                 ermax = zeros(nz)
                 ezmax = zeros(nz)
+                qsqint = zeros(nz)
+                ersqint = zeros(nz)
+                ezsqint = zeros(nz)
+                Qphase = zeros(nz)
+                dQphase = zeros(nz)
                 
             ztitle=r'$z = {:5.5f}$'.format(z)
-            axs[0].plot(x, Q.real, formatsequence[ctr%nformats], label=ztitle)
-            axs[1].plot(x, Q.imag, formatsequence[ctr%nformats], label=ztitle)
+            # axs[0].plot(x, Q.real, formatsequence[ctr%nformats], label=ztitle)
+            # axs[1].plot(x, Q.imag, formatsequence[ctr%nformats], label=ztitle)
             if p2d:
                 q2[ctr,:] = Q
                 ez2[ctr,:] = Ez
@@ -141,11 +152,21 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 if ifBY:
                     b2[ctr,:] = B
                     y2[ctr,:] = Y
+                    ymax[ctr] = abs(Y).max()
+                    bmax[ctr] = abs(B).max()
                 qmax[ctr] = abs(Q).max()
                 ermax[ctr] = abs(Er).max()
                 ezmax[ctr] = abs(Ez).max()
+                qsqint[ctr] = trapz(abs(Q)**2, x = x)
+                ersqint[ctr] = trapz(abs(Er)**2, x = x)
+                ezsqint[ctr] = trapz(abs(Ez)**2, x = x)
                 zlist.append(z)
+                
+                Qphase[ctr] = angle(q2[ctr,:]/q2[0,:]).mean()
+                dQphase[ctr] = angle(q2[ctr,:]/q2[0,:]).std()
             ctr+=1
+        
+        '''
         axs[0].set_ylabel(r'$\Re Q$')
         axs[1].set_ylabel(r'$\Im Q$')
         axs[0].set_xlabel(r'$\psi$')
@@ -158,6 +179,62 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
         fig.tight_layout()
         savefig(ddir+'/parfiverQs.png'.format(k))
         close()
+        '''
+        zlist = asarray(zlist)
+        
+        keff = kre+0.65*2.*pi
+        print("keff = ", keff)
+        
+        clf()
+        fig = figure()
+        plot(zlist, Qphase%(2.*pi), 'k.')
+        plot(zlist, ((zlist-zlist[0]) * kre) %(2.*pi), 'r:')
+        plot(zlist, ((zlist-zlist[0]) * keff) %(2.*pi), 'g:')
+        fig.set_size_inches(10.,5)
+        savefig('qphases.png')
+        
+        if ifmovie:
+            ctr=0
+            for k in karray:
+                fig, axs = plt.subplots(nrows=2, ncols = 2)
+
+                axs[0,0].plot(x, q2[0,:].real, 'r-')
+                axs[0,0].plot(x, q2[0,:].imag, 'r:')
+                axs[0,0].plot(x, q2[ctr,:].real, 'k-')
+                axs[0,0].plot(x, q2[ctr,:].imag, 'k:')
+                axs[0,0].set_ylim(minimum(q2.real, q2.imag).min(), maximum(q2.real, q2.imag).max())
+                axs[0,0].set_ylabel(r'$q$')
+                axs[0,0].set_xlabel(r'$\psi$')
+                axs[0,0].set_xscale('log')
+                axs[0,1].plot(xf, y2[0,:].real, 'r-')
+                axs[0,1].plot(xf, y2[0,:].imag, 'r:')
+                axs[0,1].plot(xf, y2[ctr,:].real, 'k-')
+                axs[0,1].plot(xf, y2[ctr,:].imag, 'k:')
+                axs[0,1].set_ylabel(r'$y$')
+                axs[0,1].set_xlabel(r'$\psi$')
+                axs[0,1].set_xscale('log')
+                axs[0,1].set_ylim(minimum(y2.real, y2.imag).min(), maximum(y2.real, y2.imag).max())
+                axs[1,0].plot(x, er2[0,:].real, 'r-')
+                axs[1,0].plot(x, er2[0,:].imag, 'r:')
+                axs[1,0].plot(x, er2[ctr,:].real, 'k-')
+                axs[1,0].plot(x, er2[ctr,:].imag, 'k:')
+                axs[1,0].set_ylabel(r'$e_r$')
+                axs[1,0].set_xlabel(r'$\psi$')
+                axs[1,0].set_xscale('log')
+                axs[1,0].set_ylim(minimum(er2.real, er2.imag).min(), maximum(er2.real, er2.imag).max())
+                axs[1,1].plot(x, ez2[0,:].real, 'r-')
+                axs[1,1].plot(x, ez2[0,:].imag, 'r:')
+                axs[1,1].plot(x, ez2[ctr,:].real, 'k-')
+                axs[1,1].plot(x, ez2[ctr,:].imag, 'k:')
+                axs[1,1].set_ylabel(r'$e_z$')
+                axs[1,1].set_xlabel(r'$\psi$')
+                axs[1,1].set_xscale('log')
+                axs[1,1].set_ylim(minimum(ez2.real, ez2.imag).min(), maximum(ez2.real, ez2.imag).max())
+                fig.suptitle(r"$\alpha = "+str(alpha)+"$, $z = {:5.2f}$".format(zlist[ctr]))
+                fig.set_size_inches(8.,6.)
+                savefig(ddir+'/fourpack{:05d}'.format(k)+'.png')
+                close()
+                ctr+=1
         # Ez:
         if nk < 100:
             clf()
@@ -203,7 +280,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             x2, z2 = meshgrid(x, zlist)
             clf()
             fig = figure()
-            pcolor(x, zlist, (abs(q2))) # assuming x is the same
+            pcolor(x, zlist, log10(abs(q2))) # assuming x is the same
             cb = colorbar()
             # cb.set_label(r'$|Q|$')
             contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
@@ -245,7 +322,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
             if ifBY:
                 clf()
                 fig = figure()
-                pcolor(xf, zlist, (abs(b2))) # assuming x is the same
+                pcolor(xf, zlist, log10(abs(b2))) # assuming x is the same
                 cb = colorbar()
                 cb.set_label(r'$|B|$')
                 # contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
@@ -257,7 +334,7 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 savefig(ddir+'/Babs.png')
                 clf()
                 fig=figure()
-                pcolor(xf, zlist, (abs(y2))) # , vmin = -2.0, vmax = 0.5) # assuming x is the same
+                pcolor(xf, zlist, log10(abs(y2))) # , vmin = -2.0, vmax = 0.5) # assuming x is the same
                 cb = colorbar()
                 cb.set_label(r'$|Y|$')
                 contour(x2, z2, rfun(z2, x2, alpha, z0 = zlist[0]), colors='w') #
@@ -276,11 +353,31 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
                 fig.tight_layout()
                 savefig(ddir+'/Yabs.png')
 
-    # growth curves:
-    zlist = asarray(zlist)
-    ffit_q, ffit_q_cov = polyfit(log(zlist), log(qmax), 1, cov=True)
-    ffit_er, ffit_er_cov = polyfit(log(zlist), log(ermax), 1, cov=True)
-    ffit_ez, ffit_ez_cov = polyfit(log(zlist), log(ezmax), 1, cov=True)
+    clf()
+    fig = figure()
+    plot(zlist, qsqint, formatsequence[0], label=r'$\int |Q|^2 d\psi$')
+    plot(zlist, ezsqint, formatsequence[1], label=r'$\int |E_z|^2 d\psi$')
+    plot(zlist, ersqint, formatsequence[2], label=r'$\int |E_r|^2 d\psi$')
+    xlabel(r'$z$')
+    yscale('log')
+    if (zlist.max()/zlist.min()>3.):
+        xscale('log')
+        # growth curves:
+        ffit_q, ffit_q_cov = polyfit(log(zlist), log(qsqint), 1, cov=True)
+        ffit_er, ffit_er_cov = polyfit(log(zlist), log(ersqint), 1, cov=True)
+        ffit_ez, ffit_ez_cov = polyfit(log(zlist), log(ezsqint), 1, cov=True)
+        print("alpha = ", alpha, "int |Q|^2d\psi \simeq z^(", ffit_q[0], "+/-", sqrt(ffit_q_cov[0,0]),") * (", exp(ffit_q[1]), "+/-", exp(ffit_q[1])*sqrt(ffit_q_cov[1,1]),")")
+        print("alpha = ", alpha, "int |Er|^2 d\psi \simeq z^(", ffit_er[0], "+/-", sqrt(ffit_er_cov[0,0]),") * (", exp(ffit_er[1]), "+/-", exp(ffit_er[1])*sqrt(ffit_er_cov[1,1]),")")
+        print("alpha = ", alpha, "int |Ez|^2 d\psi \simeq z^(", ffit_ez[0], "+/-", sqrt(ffit_ez_cov[0,0]),") * (", exp(ffit_ez[1]), "+/-", exp(ffit_ez[1])*sqrt(ffit_ez_cov[1,1]),")")
+        plot(zlist, exp(log(zlist)*ffit_q[0]+ffit_q[1]), 'm-.') # , label=r'linear fit to $\max |Q|$')
+        plot(zlist, exp(log(zlist)*ffit_er[0]+ffit_er[1]), 'm-.') # , r'linear fit to $\max |E_r|$')
+        plot(zlist, exp(log(zlist)*ffit_ez[0]+ffit_ez[1]), 'm-.') #, r'linear fit to $\max |E_z|$')
+    legend()
+    ylim(minimum(ezsqint, qmax).min(), maximum(ezsqint,qsqint).max())
+    fig.set_size_inches(8.,4.)
+    fig.tight_layout()
+    savefig(ddir+'/intcurve.png')
+
 
     clf()
     fig = figure()
@@ -291,18 +388,48 @@ def fiver_plotN(karray, nblocks=0, ddir = 'pfiver_alpha0.1/', p2d = False, alpha
     yscale('log')
     if (zlist.max()/zlist.min()>3.):
         xscale('log')
-        print("Q \simeq z^(", ffit_q[0], "+/-", sqrt(ffit_q_cov[0,0]),") * (", exp(ffit_q[1]), "+/-", exp(ffit_q[1])*sqrt(ffit_q_cov[1,1]),")")
-        print("Er \simeq z^(", ffit_er[0], "+/-", sqrt(ffit_er_cov[0,0]),") * (", exp(ffit_er[1]), "+/-", exp(ffit_er[1])*sqrt(ffit_er_cov[1,1]),")")
-        print("Ez \simeq z^(", ffit_ez[0], "+/-", sqrt(ffit_ez_cov[0,0]),") * (", exp(ffit_ez[1]), "+/-", exp(ffit_ez[1])*sqrt(ffit_ez_cov[1,1]),")")
-        plot(zlist, exp(log(zlist)*ffit_q[0]+ffit_q[1]), 'm-.', r'linear fit to $\max |Q|$')
 
-    # legend()
-    ylim(qmax.min(), qmax.max())
+        # growth curves:
+        ffit_q, ffit_q_cov = polyfit(log(zlist), log(qmax), 1, cov=True)
+        ffit_er, ffit_er_cov = polyfit(log(zlist), log(ermax), 1, cov=True)
+        ffit_ez, ffit_ez_cov = polyfit(log(zlist), log(ezmax), 1, cov=True)
+        ffit_y, ffit_y_cov = polyfit(log(zlist), log(ymax), 1, cov=True)
+        ffit_b, ffit_b_cov = polyfit(log(zlist), log(bmax), 1, cov=True)
+
+        print("alpha = ", alpha, "Q \simeq z^(", ffit_q[0], "+/-", sqrt(ffit_q_cov[0,0]),") * (", exp(ffit_q[1]), "+/-", exp(ffit_q[1])*sqrt(ffit_q_cov[1,1]),")")
+        print("alpha = ", alpha, "Er \simeq z^(", ffit_er[0], "+/-", sqrt(ffit_er_cov[0,0]),") * (", exp(ffit_er[1]), "+/-", exp(ffit_er[1])*sqrt(ffit_er_cov[1,1]),")")
+        print("alpha = ", alpha, "Ez \simeq z^(", ffit_ez[0], "+/-", sqrt(ffit_ez_cov[0,0]),") * (", exp(ffit_ez[1]), "+/-", exp(ffit_ez[1])*sqrt(ffit_ez_cov[1,1]),")")
+        print("alpha = ", alpha, "Y \simeq z^(", ffit_y[0], "+/-", sqrt(ffit_y_cov[0,0]),") * (", exp(ffit_y[1]), "+/-", exp(ffit_y[1])*sqrt(ffit_y_cov[1,1]),")")
+        print("alpha = ", alpha, "B \simeq z^(", ffit_b[0], "+/-", sqrt(ffit_b_cov[0,0]),") * (", exp(ffit_b[1]), "+/-", exp(ffit_b[1])*sqrt(ffit_b_cov[1,1]),")")
+        plot(zlist, exp(log(zlist)*ffit_q[0]+ffit_q[1]), 'm-.') # , label=r'linear fit to $\max |Q|$')
+        plot(zlist, exp(log(zlist)*ffit_er[0]+ffit_er[1]), 'm-.') # , r'linear fit to $\max |E_r|$')
+        plot(zlist, exp(log(zlist)*ffit_ez[0]+ffit_ez[1]), 'm-.') #, r'linear fit to $\max |E_z|$')
+
+    legend()
+    ylim(minimum(ezmax, qmax).min(), maximum(ezmax,qmax).max())
     fig.set_size_inches(8.,4.)
     fig.tight_layout()
     savefig(ddir+'/growthcurve.png')
+    if ifBY:
+        clf()
+        plot(zlist, ymax, formatsequence[0], label=r'$\max |Y|$')
+        yscale('log')
+        if (zlist.max()/zlist.min()>3.):
+            xscale('log')
+            plot(zlist, exp(log(zlist)*ffit_y[0]+ffit_y[1]), 'm-.') # , label=r'linear fit to $\max |Q|$')
+        fig.set_size_inches(8.,4.)
+        fig.tight_layout()
+        savefig(ddir+'/growthcurve_y.png')
+        clf()
+        plot(zlist, bmax, formatsequence[0], label=r'$\max |Y|$')
+        yscale('log')
+        if (zlist.max()/zlist.min()>3.):
+            xscale('log')
+            plot(zlist, exp(log(zlist)*ffit_b[0]+ffit_b[1]), 'm-.') # , label=r'linear fit to $\max |Q|$')
+        fig.set_size_inches(8.,4.)
+        fig.tight_layout()
+        savefig(ddir+'/growthcurve_b.png')
     close('all')
-    # TODO: slope estimate
     
     if ifBY:
         # ezhalf = (ez2[:,0]+ez2[:,1])/2.

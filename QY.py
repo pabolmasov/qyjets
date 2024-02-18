@@ -564,14 +564,14 @@ def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
         reresid = reshape(reresid, (nkreal, nkimag))
         imresid = reshape(imresid, (nkreal, nkimag))
     else:
-        nkreal = 50 ; nkimag = 21
-        kreal_min = -5.0 ; kreal_max = 35.0
+        nkreal = 100 ; nkimag = 101
+        kreal_min = -25.0 ; kreal_max = 125.0
         kreal = (kreal_max-kreal_min) * arange(nkreal) / double(nkreal) + kreal_min
         if imlog:
             kimag_min = 0.001 ; kimag_max = 1.0
             kimag = (kimag_max/kimag_min) ** (arange(nkimag) / double(nkimag)) * kimag_min
         else:
-            kimag_min = -2.001 ; kimag_max = 2.00
+            kimag_min = -15.001 ; kimag_max = 15.00
             kimag = (kimag_max-kimag_min) * arange(nkimag) / double(nkimag) + kimag_min
         
         k2 = zeros([nkreal, nkimag], dtype=complex)
@@ -617,7 +617,7 @@ def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
     if imlog:
         yscale('log')
     fig.tight_layout()
-    fig.set_size_inches(kreal.max()-kreal.min(), kimag.max()-kimag.min())
+    fig.set_size_inches(15.,4.) # kreal.max()-kreal.min(), kimag.max()-kimag.min())
     savefig('resmap.png')
     savefig('resmap.pdf')
 

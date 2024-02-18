@@ -16,6 +16,7 @@ import os
 import scipy
 # from scipy import scipy.special
 from scipy.special import jv, jn_zeros
+from scipy.optimize import fsolve
 
 '''
 Real solution for normalized system of equations
@@ -105,6 +106,7 @@ def normcurve(omega, m):
     fout.close()
     
     rlist = asarray(rlist)
+    qlist = asarray(qlist)
     
     jsol = scipy.special.jv(2, sqrt(2.*omega)*rlist) / rlist**(m/2.)
     
@@ -130,3 +132,9 @@ def normcurve(omega, m):
     fig.set_size_inches(8.,4.)
     savefig('qyx_J.png')
     
+    wroots = (qlist[1:] * qlist[:-1]) < 0.
+    
+    rroots = (rlist[1:]+rlist[:-1])[wroots]/2.
+    
+    print("r roots = ",rroots)
+    print("k roots = ", rroots**2)

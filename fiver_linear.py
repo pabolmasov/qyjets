@@ -36,6 +36,7 @@ rc('text', usetex=True)
 matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amssymb,amsmath}"] 
 
 import fiver_reader as reader
+import IC as ic
 
 if(size(sys.argv)>1):
     if csize > 0:
@@ -52,7 +53,7 @@ chi = alpha * (1.+2.*alpha)/6.
 omega = 1.5
 m = 1 # not applicable for m=0: the scaling shd then be different
 sigma = m-1.
-Rin = 0.1
+Rin = 0.05
 Rout = 1.0
 z0 = 1. # all the others use z=10
 npsi = 200
@@ -80,16 +81,18 @@ AD0 = 2.
 erexp = True
 
 ifGauss = False
-ifSpline = False
+ifSpline = True
 
 # restart block:
 ifrestart = False
 restartn = 1440
 ddir = 'L15_alpha0.5'
 
-dirpref = 'L15' # directory prefix
+dirpref = 'spline' # directory prefix
 # L04 is harmonic test for omega=0.4
 # L15 for omega 1.5
+# L15R2 for omega 1.5 and Rin=0.2
+# L15R05 for omega 1.5 and Rin=0.05
 
 # if ifGauss:
 outdir = dirpref+'_alpha'+str(alpha)
@@ -97,26 +100,6 @@ outdir = dirpref+'_alpha'+str(alpha)
 #    outdir = 'lfiver_alpha'+str(alpha)
 print(outdir)
 os.system('mkdir '+outdir)
-
-def splinefun(x, x1, x2, x3, a):
-    
-    nx = size(x)
-    y = zeros(nx, dtype=complex128)
-    ydiv = zeros(nx, dtype=complex128)
-    
-    w1 = (x<x2) * (x>x1)
-    w2 = (x<x3) * (x>x2)
-    
-    xnorm1 = (x-x1)/(x2-x1)
-    xnorm2 = (x-x3)/(x2-x3)
-
-    y[w1] = (3.-2.*xnorm1[w1])*xnorm1[w1]**2
-    y[w2] = (3.-2.*xnorm2[w2])*xnorm2[w2]**2
-
-    ydiv[w1] = 6. * (1.-xnorm1[w1]) * xnorm1[w1] / (x2 - x1)
-    ydiv[w2] = 6. * (1.-xnorm2[w2]) * xnorm2[w2] / (x2 - x3)
-
-    return y * a, ydiv * a
 
 ##############################################
 
@@ -232,7 +215,7 @@ def rfun(z, psi):
 
 def rtopsi(r, z):
     return (r/Rout )**2 * (z/z0)**(-2.*alpha) # + log(1.-chi * (r/z)**2)
-    
+
 def leftBC(y0, y1):
     '''
     if we want 0 derivative @ half-step, = y0
@@ -433,11 +416,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     if abs((ee[-1]+ee1)/2.) > 1e-4:
         print("Ee test = ", (ee[-1]+ee1)/2.)
         # ii = input("E")
-    
-    # print(psi0)
-    # ii = input('r0')
-    sigma1 = (sigma+1.)/2.
-    
+        
     Bz_half, Y_half = byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0 = Q0, Er0 = Er0, Ez0 = Ez0, Q1 = Q1, Er1 = Er1, Ez1 = Ez1, adddiff=not(Ydiffswitch))
 
     # QQQQQQQQ
@@ -645,7 +624,7 @@ def onerun(icfile, ifpcolor = False):
         
     if ifSpline:
         x1 = 0.3 ; x2 = 0.5 ; x3 = 0.7
-        Q, Qdiv = splinefun(psi, x1, x2, x3, 1.)
+        Q, Qdiv = ic.splinefun(psi, x1, x2, x3, 1.)
         # print(shape(Q), shape(Qdiv))
         Er = -1.j * sqrt(psi)/r * (2./m * Qdiv * psi + Q)
         Ez *= 0.
