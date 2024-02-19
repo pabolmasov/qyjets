@@ -53,7 +53,9 @@ chi = alpha * (1.+2.*alpha)/6.
 omega = 1.5
 m = 1 # not applicable for m=0: the scaling shd then be different
 sigma = m-1.
-Rin = 0.05
+sigma1 = (sigma+1.)/2.
+
+Rin = 0.1
 Rout = 1.0
 z0 = 1. # all the others use z=10
 npsi = 200
@@ -81,14 +83,14 @@ AD0 = 2.
 erexp = True
 
 ifGauss = False
-ifSpline = True
+ifSpline = False
 
 # restart block:
 ifrestart = False
 restartn = 1440
 ddir = 'L15_alpha0.5'
 
-dirpref = 'spline' # directory prefix
+dirpref = 'L15' # directory prefix
 # L04 is harmonic test for omega=0.4
 # L15 for omega 1.5
 # L15R2 for omega 1.5 and Rin=0.2
@@ -277,9 +279,7 @@ def byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0=None, Er0=None, Ez0 = None, Q1 = No
     # ee1 = Ez1 + alpha *r1/ z / sqrt(psi1) * Er1g
     ee1 = -ee[-1]
 
-    Ez1 = ee1 - alpha/z * r1/sqrt(psi1) * Er1g
-
-    sigma1 = (sigma+1.)/2.
+    Ez1 = ( ee1 - alpha/z * r1/sqrt(psi1) * Er1g ) / (1.-2.*chi * (r1/z)**2)
 
     Bz_half = zeros(npsi+1, dtype=complex128) # B
         
@@ -404,6 +404,7 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     if Ez1 is None:
         # Ez1 = -Ez[-1] - alpha/z * rf[-1] /sqrt(psif[-1]) * 2. * Er1
         Ez1 = -Ez[-1] - alpha/z * ((r/sqrt(psi) * Er)[-1]+Er1g * r1/sqrt(psi1))
+        Ez1 /= 1.-2.*chi*(r1/z)**2
     else:
         Ez1 *= exp(1.j * BC_k * (z-z0))
     
@@ -413,8 +414,8 @@ def step(psi, psif, Q, Er, Ez, z = 0., Qout = None, Erout = None, Ezout = None, 
     ee0 = Ez0 + alpha*r0/z/sqrt(psi0) * Er0
     ee1 = Ez1 + alpha *r1/ z /sqrt(psi1) * Er1g
     
-    if abs((ee[-1]+ee1)/2.) > 1e-4:
-        print("Ee test = ", (ee[-1]+ee1)/2.)
+    #if abs((ee[-1]+ee1)/2.) > 1e-4:
+    #    print("Ee test = ", (ee[-1]+ee1)/2.)
         # ii = input("E")
         
     Bz_half, Y_half = byfun(psi, psif, r, rf, Q, Er, Ez, z, Q0 = Q0, Er0 = Er0, Ez0 = Ez0, Q1 = Q1, Er1 = Er1, Ez1 = Ez1, adddiff=not(Ydiffswitch))
