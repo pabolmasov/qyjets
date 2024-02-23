@@ -3,6 +3,15 @@ usage:
 
 > python fiver_alpha_psi.py [alpha]
 
+or 
+
+> python fiver_linear.py [alpha]
+
+Givern multiple arguments, fiver_linear.py can work with mpirun and run several different alphas in parallel 
+
 for example:
 
 > python fiver_alpha_psi.py 0.1
+> mpirun -n 3 fiver_linear.py 0.0 0.2 0.4
+
+Parallel version of the code fiver_parallel splits the computational domain in equal parts and uses mpi to calculate them separately. So far, the time step decreases with dx quadratically, that makes parallel computations inefficient. 
