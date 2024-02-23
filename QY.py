@@ -13,6 +13,11 @@ import glob
 import re
 import os
 
+import scipy
+# from scipy import scipy.special
+from scipy.special import jv, jn_zeros
+
+
 from cmath import phase
 
 #Uncomment the following if you want to use LaTeX in figures 
@@ -29,11 +34,13 @@ Y0 = 1.
 
 drout = 1e-3
 
+rin = 0.0
+
 dr0 = 1e-2
 tol = 1e-4
 drmin = 1e-4
 
-# omega = 0.5
+# omega = 1.0
 # m = 1
 
 def sslopefun(omega, m):
@@ -151,7 +158,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
         
     rlist = [] ; qlist = [] ; ylist = []
     
-    r = 0. ; rstore = 0.
+    rstore = 0.
     Y = 1. + 0.j
     if Q0 is not None:
         Q = Q0
@@ -161,10 +168,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     # maxQ  = 0.
     mk = 0. ; N = 0. ; ncrit = 0.
     
-    r = drmin
+    r = rin+drmin
     dr = drmin
     
-    while(r<R0*(1.+0.1*ifplot)):
+    while(r<R0*(1.+0.01*ifplot)):
         dQ = RHSQQ(r,k, omega, m)*Q + RHSQY(r,k, omega, m) * Y
         dY = RHSYQ(r,k, omega, m)*Q + RHSYY(r,k, omega, m) * Y
         
@@ -173,7 +180,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
             dr = minimum(maximum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
         else:
             if abs(Q) > 1e-8:
-                dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
+                if (abs(dQ)+abs(dY))< 1e-8:
+                    dr = dr0
+                else:
+                    dr = minimum(minimum(abs(Q/dQ) * tol,abs(Y/dY)*tol),dr0)
             else:
                 dr = minimum(abs(Y/dY)*tol,dr0)
         # dr = minimum(maximum(drmin, drmin/(r+drmin) * tol), drmin
@@ -222,7 +232,7 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     rlist = asarray(rlist[1:])
     qlist = asarray(qlist[1:])
     ylist = asarray(ylist[1:])
-    # Qlast /= sqrt(median(qlist.real**2+qlist.imag**2))
+    Qlast /= sqrt(median(qlist.real**2+qlist.imag**2))
     
     # Ylast = (Y  - Yprev )/dr * rprev + Yprev
 
@@ -272,10 +282,10 @@ def onecurve(kvec, omega, m, R0, ifplot = False, Q0 = None):
     if isnan(Qlast):
         return [100.,100.]
         
-    if abs(ncrit) > abs(Qlast):
-        return [ncrit.real, ncrit.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
-    else:
-        return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    # if abs(ncrit) > abs(Qlast):
+    #     return [ncrit.real, ncrit.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
+    # else:
+    return [Qlast.real, Qlast.imag] # (Qlast.real**2+Qlast.imag**2) # +Ylast.real**2+Ylast.imag**2)
 
 def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
     '''
@@ -294,15 +304,26 @@ def onem(oar, m=1, k0 = [-1.737,-0.013], R0 = 1.):
     kim_plus = zeros(noar)
 
     fout = open('ksoles_m'+str(m)+'.dat', 'w+')
-    fout.write("omega  Re(k-)  Im(k-)  Re(k+)  Im(k+)\n")
+    fout.write("# omega  Re(k-)  Im(k-)  Re(k+)  Im(k+)\n")
     
     for i in arange(noar):
+        print("omega = ", oar[i])
         res = root(onecurve, k0, args = (oar[i], m, R0))
         if res.success:
+            print("first stage complete")
             res_plus = root(onecurve, [res.x[0], -res.x[1]], args = (oar[i], m, R0), tol=1e-8)
             kre[i] = res.x[0]
             kim[i] = res.x[1]
-        # if res.success:
+            print("omega = ", oar[i], ": k = ", res.x[0], "+",res.x[1], "i")
+            fout.write(str(oar[i])+" "+str(res.x[0])+" "+str(res.x[1])+"\n")
+            fout.flush()
+            onecurve(res.x, oar[i], m, R0, ifplot=True)
+            filename = 'qysol_o'+str(oar[i])+'_m'+str(m)+'.dat'
+            os.system('cp qysol.dat '+filename)
+            # adding a perturbation on each step
+            randphase = rand()
+            k0 = res.x * (1. + 0.01 * exp(2.j*pi*randphase))
+        if 0:
             if res_plus.success:
                 print("omega = ", oar[i], ": k = ", res.x[0], "+",res.x[1], "i")
                 fout.write(str(oar[i])+" "+str(res.x[0])+" "+str(res.x[1])+" "+str(res_plus.x[0])+" "+str(res_plus.x[1])+"\n")
@@ -451,6 +472,84 @@ def Rvar(omega, m, norecalc = False):
         os.system('cp qysol.dat qysol{:3.2f}.dat'.format(rlist[0]))
         curvescompare('qysol{:3.2f}.dat'.format(rlist[0]), 'qysol{:3.2f}.dat'.format(R0))
 
+
+def QYmin_real(omega, m, recalc = True):
+
+    nkreal = 150
+    kreal_min = 10. ; kreal_max = 1000.0
+    
+    kreal = (kreal_max/kreal_min) ** (arange(nkreal) / double(nkreal-1)) * kreal_min
+
+    kimag = 1.e-8
+    
+    imresid = zeros(nkreal)
+    reresid = zeros(nkreal)
+
+    # ASCII output
+    if recalc:
+        fout = open('qymap_real.dat', 'w+')
+        fout.write('# Re(k)  Im(k)  Re(\Delta Q) Im(\Delta Q)\n')
+    
+    for kr in arange(nkreal):
+        if recalc:
+            tmp = onecurve([kreal[kr], kimag], omega, m, R0=1., ifplot=True)
+            imresid[kr] = tmp[0]
+            reresid[kr] = tmp[1]
+            print("k = ", kreal[kr], "i:   ", reresid[kr], " ", imresid[kr])
+            fout.write(str(kreal[kr])+" "+str(kimag)+" "+str(reresid[kr])+" "+str(imresid[kr])+"\n")
+            fout.flush()
+            os.system('cp qysol.dat qysol{:3.2f}.dat'.format(kreal[kr]))
+        lines = loadtxt('qysol{:3.2f}.dat'.format(kreal[kr]))
+        omega1, m1, R01, kre1, kim1 = lines[0,:]
+        # if not(recalc):
+        print(kreal[kr], ' = ', kre1)
+        print(omega, ' = ', omega1)
+        r1 = lines[1:,0]
+        qre = lines[1:,1]  ;   qim = lines[1:,2]
+        yre = lines[1:,3]  ;   yim = lines[1:,4]
+
+        if kr==0:
+            r = r1
+            nr = size(r)
+            q2 = zeros([nr,nkreal])
+            q2[:,0] = qim
+        else:
+            qfun = interp1d(r1, qim, bounds_error=False)
+            q2[:,kr] = qfun(r)
+            reresid[kr] = 0.
+            imresid[kr] = qfun(1.)
+
+    if recalc:
+        fout.close()
+
+    clf()
+    fig = figure()
+    plot(kreal, kreal * reresid, 'k-')
+    plot(kreal, kreal * imresid, 'r:')
+    nb = 10 # Bessel roots
+    jzeros = scipy.special.jn_zeros(2,nb)
+    plot(jzeros**2/2./omega, jzeros*0., 'og')
+    xlabel(r'$k$')
+    ylabel(r'$Q(r=1)$')
+    xscale('log')
+    # ylim(-0.01,0.01)
+    fig.set_size_inches(8.,4.)
+    savefig('QYmin_real.png')
+    
+    k2, r2 = meshgrid(kreal, r)
+    
+    clf()
+    pcolor(k2, r2, q2, cmap='afmhot', vmin=-0.01, vmax=0.01)
+    colorbar()
+    contour(k2, r2, q2, levels=[0.], colors= 'w')
+    plot(jzeros**2/2./omega, jzeros*0.+1., 'v', color=(0.5,1.0,0.5))
+    xlabel(r'$k$')
+    ylabel(r'$r$')
+    xscale('log')
+    xlim(k2.min(), k2.max())
+    fig.set_size_inches(8.,4.)
+    savefig('QYmin_real_2d.png')
+
 def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
 
     if norecalc:
@@ -465,14 +564,14 @@ def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
         reresid = reshape(reresid, (nkreal, nkimag))
         imresid = reshape(imresid, (nkreal, nkimag))
     else:
-        nkreal = 50 ; nkimag = 21
-        kreal_min = -5.0 ; kreal_max = 35.0
+        nkreal = 100 ; nkimag = 101
+        kreal_min = -25.0 ; kreal_max = 125.0
         kreal = (kreal_max-kreal_min) * arange(nkreal) / double(nkreal) + kreal_min
         if imlog:
             kimag_min = 0.001 ; kimag_max = 1.0
             kimag = (kimag_max/kimag_min) ** (arange(nkimag) / double(nkimag)) * kimag_min
         else:
-            kimag_min = -2.001 ; kimag_max = 2.00
+            kimag_min = -15.001 ; kimag_max = 15.00
             kimag = (kimag_max-kimag_min) * arange(nkimag) / double(nkimag) + kimag_min
         
         k2 = zeros([nkreal, nkimag], dtype=complex)
@@ -518,7 +617,7 @@ def QYmin(omega, m, ifoptimize=True, imlog=False, R0=1., norecalc = False):
     if imlog:
         yscale('log')
     fig.tight_layout()
-    fig.set_size_inches(kreal.max()-kreal.min(), kimag.max()-kimag.min())
+    fig.set_size_inches(15.,4.) # kreal.max()-kreal.min(), kimag.max()-kimag.min())
     savefig('resmap.png')
     savefig('resmap.pdf')
 
